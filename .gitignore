@@ -1,0 +1,20 @@
+# Backend
+backend/venv/
+backend/.env
+backend/firebase-config.json
+backend/__pycache__/
+backend/*.pyc
+
+# Frontend
+frontend/node_modules/
+frontend/dist/
+frontend/.env
+frontend/.env.local
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
