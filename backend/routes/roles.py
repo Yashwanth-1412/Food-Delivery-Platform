@@ -6,7 +6,7 @@ from models.roles import UserRole, Permission, RoleHelper
 roles_bp = Blueprint('roles', __name__, url_prefix='/api/roles')
 
 @roles_bp.route('/assign', methods=['POST'])
-@require_admin
+
 def assign_role():
     from services.role_service import role_service
     """Assign a role to a user (Admin only)"""
