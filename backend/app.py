@@ -20,6 +20,7 @@ from routes.profile import profile_bp
 from routes.users import users_bp
 from routes.auth import auth_bp
 from routes.roles import roles_bp
+from routes.restaurants import restaurants_bp  # NEW!
 
 def create_app():
     """Application factory pattern"""
@@ -31,15 +32,16 @@ def create_app():
     app.register_blueprint(users_bp)
     app.register_blueprint(auth_bp)
     app.register_blueprint(roles_bp)
+    app.register_blueprint(restaurants_bp)  # NEW!
     
     # Basic routes
     @app.route('/')
     def home():
         return jsonify({
-            "message": "🚀 Food Delivery Backend with Role-Based Access Control",
+            "message": "🚀 Food Delivery Backend with Restaurant Management",
             "status": "healthy",
             "firebase_connected": firebase_initialized,
-            "version": "3.0 - Simple Init Pattern",
+            "version": "3.1 - Restaurant Phase",
             "roles": {
                 "customer": "Can browse menus and place orders",
                 "agent": "Can accept and deliver orders", 
@@ -80,6 +82,20 @@ def create_app():
                     "GET /api/roles/role-data",
                     "PUT /api/roles/role-data",
                     "DELETE /api/roles/remove/<uid>"
+                ],
+                "restaurants": [
+                    "GET/PUT /api/restaurants/profile",
+                    "GET/PUT /api/restaurants/settings",
+                    "GET/POST /api/restaurants/categories",
+                    "PUT/DELETE /api/restaurants/categories/<id>",
+                    "GET/POST /api/restaurants/menu-items",
+                    "PUT/DELETE /api/restaurants/menu-items/<id>",
+                    "PUT /api/restaurants/menu-items/<id>/toggle",
+                    "GET /api/restaurants/orders",
+                    "PUT /api/restaurants/orders/<id>/status",
+                    "GET /api/restaurants/stats",
+                    "GET /api/restaurants/analytics",
+                    "POST /api/restaurants/upload-image"
                 ]
             }
         })
@@ -93,36 +109,91 @@ def create_app():
             "firestore_connected": get_db() is not None,
             "storage_connected": get_bucket() is not None,
             "environment": os.getenv('FLASK_ENV', 'production'),
-            "initialization": "simple_pattern"
+            "restaurant_features": "enabled"
         })
     
-    @app.route('/api/setup-demo-user', methods=['POST'])
-    def setup_demo_user():
-        """Setup demo users for testing (remove in production)"""
+    @app.route('/api/setup-demo-restaurant', methods=['POST'])
+    def setup_demo_restaurant():
+        """Setup demo restaurant data for testing (remove in production)"""
         try:
             from services.role_service import role_service
+            from services.restaurant_service import restaurant_service
             from models.roles import UserRole
             
-            # This is just for demo - remove in production
-            demo_users = [
-                {'uid': 'demo_customer', 'role': UserRole.CUSTOMER},
-                {'uid': 'demo_agent', 'role': UserRole.AGENT},
-                {'uid': 'demo_restaurant', 'role': UserRole.RESTAURANT},
-                {'uid': 'demo_admin', 'role': UserRole.ADMIN}
+            # Create demo restaurant user
+            demo_uid = 'demo_restaurant_123'
+            
+            # Assign restaurant role
+            role_service.assign_role(demo_uid, UserRole.RESTAURANT)
+            
+            # Create restaurant profile
+            restaurant_data = {
+                'restaurant_name': 'Demo Pizza Palace',
+                'cuisine_type': 'Italian',
+                'description': 'Authentic Italian pizza and pasta',
+                'address': '123 Main St, Demo City',
+                'phone': '+1234567890',
+                'email': 'demo@pizzapalace.com'
+            }
+            
+            restaurant_profile = restaurant_service.create_restaurant_profile(demo_uid, restaurant_data)
+            
+            # Create demo categories
+            categories_data = [
+                {'name': 'Pizzas', 'description': 'Delicious wood-fired pizzas'},
+                {'name': 'Pasta', 'description': 'Fresh homemade pasta dishes'},
+                {'name': 'Beverages', 'description': 'Refreshing drinks'}
             ]
             
-            created_users = []
-            for user in demo_users:
-                role_service.assign_role(user['uid'], user['role'])
-                created_users.append({
-                    'uid': user['uid'],
-                    'role': user['role'].value
-                })
+            created_categories = []
+            for cat_data in categories_data:
+                category = restaurant_service.create_menu_category(demo_uid, cat_data)
+                created_categories.append(category)
+            
+            # Create demo menu items
+            if created_categories:
+                pizza_category_id = created_categories[0]['id']
+                pasta_category_id = created_categories[1]['id']
+                
+                menu_items_data = [
+                    {
+                        'category_id': pizza_category_id,
+                        'name': 'Margherita Pizza',
+                        'description': 'Classic tomato, mozzarella, and basil',
+                        'price': 12.99,
+                        'is_vegetarian': True,
+                        'prep_time': 15
+                    },
+                    {
+                        'category_id': pizza_category_id,
+                        'name': 'Pepperoni Pizza',
+                        'description': 'Pepperoni and mozzarella cheese',
+                        'price': 15.99,
+                        'prep_time': 15
+                    },
+                    {
+                        'category_id': pasta_category_id,
+                        'name': 'Spaghetti Carbonara',
+                        'description': 'Creamy pasta with bacon and parmesan',
+                        'price': 14.99,
+                        'prep_time': 20
+                    }
+                ]
+                
+                created_items = []
+                for item_data in menu_items_data:
+                    item = restaurant_service.create_menu_item(demo_uid, item_data)
+                    created_items.append(item)
             
             return jsonify({
                 'success': True,
-                'message': 'Demo users created',
-                'users': created_users,
+                'message': 'Demo restaurant created successfully!',
+                'data': {
+                    'restaurant_uid': demo_uid,
+                    'restaurant_profile': restaurant_profile,
+                    'categories_count': len(created_categories),
+                    'menu_items_count': len(created_items) if 'created_items' in locals() else 0
+                },
                 'warning': 'Remove this endpoint in production!'
             })
         except Exception as e:
@@ -173,10 +244,11 @@ def create_app():
 app = create_app()
 
 if __name__ == '__main__':
-    print("🚀 Starting Food Delivery Backend...")
+    print("🚀 Starting Food Delivery Backend with Restaurant Features...")
     print(f"📁 Firebase config file exists: {os.path.exists('firebase-config.json')}")
     print(f"🔧 Environment: {os.getenv('FLASK_ENV', 'production')}")
     print("✅ Firebase initialized before service imports")
     print("✅ All routes registered successfully")
+    print("🏪 Restaurant management endpoints ready!")
     
     app.run(debug=True, port=5000, host='0.0.0.0')

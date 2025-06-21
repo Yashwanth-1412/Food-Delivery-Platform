@@ -149,3 +149,4 @@ def check_auth():
             'authenticated': False,
             'error': str(e)
         }), 401
+    

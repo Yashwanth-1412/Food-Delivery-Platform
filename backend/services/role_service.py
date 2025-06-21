@@ -2,6 +2,7 @@ from firebase_admin import firestore
 from config.firebase import get_db
 from models.roles import UserRole, Permission, RoleHelper, RoleSpecificData
 from typing import Optional, Dict, List, Any
+from datetime import datetime
 
 class RoleService:
     def __init__(self):
@@ -20,8 +21,8 @@ class RoleService:
             role_data = {
                 'uid': uid,
                 'role': role.value,
-                'assigned_at': firestore.SERVER_TIMESTAMP,
-                'updated_at': firestore.SERVER_TIMESTAMP,
+                'assigned_at': datetime.utcnow(),
+                'updated_at': datetime.utcnow(),
                 'is_active': True
             }
             
@@ -63,7 +64,7 @@ class RoleService:
             role_ref = self.db.collection(self.roles_collection).document(uid)
             update_data = {
                 'role': new_role.value,
-                'updated_at': firestore.SERVER_TIMESTAMP,
+                'updated_at': datetime.utcnow(),
                 'previous_role': current_role.value if current_role else None,
                 'updated_by': updated_by
             }
@@ -82,7 +83,7 @@ class RoleService:
             role_ref = self.db.collection(self.roles_collection).document(uid)
             role_ref.update({
                 'is_active': False,
-                'deactivated_at': firestore.SERVER_TIMESTAMP
+                'deactivated_at': datetime.utcnow()
             })
             return True
         except Exception as e:
@@ -138,7 +139,7 @@ class RoleService:
         """Update role-specific data for a user"""
         try:
             data_ref = self.db.collection(self.role_data_collection).document(uid)
-            data['updated_at'] = firestore.SERVER_TIMESTAMP
+            data['updated_at'] = datetime.utcnow()
             data_ref.update(data)
             return True
         except Exception as e:
@@ -162,8 +163,8 @@ class RoleService:
             role_data.update({
                 'uid': uid,
                 'role': role.value,
-                'created_at': firestore.SERVER_TIMESTAMP,
-                'updated_at': firestore.SERVER_TIMESTAMP
+                'created_at': datetime.utcnow(),
+                'updated_at': datetime.utcnow()
             })
             
             # Save to database
