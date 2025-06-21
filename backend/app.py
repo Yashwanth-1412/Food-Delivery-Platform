@@ -25,7 +25,7 @@ from routes.restaurants import restaurants_bp  # NEW!
 def create_app():
     """Application factory pattern"""
     app = Flask(__name__)
-    CORS(app)
+    CORS(app, origins=["http://localhost:5173"])
     
     # Register blueprints
     app.register_blueprint(profile_bp)

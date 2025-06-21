@@ -1,3 +1,4 @@
+// frontend/src/services/restaurantApi.js
 import axios from 'axios';
 import { authService } from '../firebase/auth';
 

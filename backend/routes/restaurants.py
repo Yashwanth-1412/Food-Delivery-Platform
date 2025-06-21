@@ -234,9 +234,9 @@ def get_menu_items():
         category_id = request.args.get('category_id')
         
         if category_id:
-            menu_items = restaurant_service.get_menu_items_by_category(uid, category_id)
+            menu_items = restaurant_service.get_menu_items(uid, category_id)
         else:
-            menu_items = restaurant_service.get_all_menu_items(uid)
+            menu_items = restaurant_service.get_menu_items(uid)
         
         return jsonify({
             'success': True,
@@ -485,6 +485,23 @@ def upload_menu_item_image():
             'success': False,
             'error': str(e)
         }), 400
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+@restaurants_bp.route('/menu/summary', methods=['GET'])
+@require_restaurant_or_admin
+def get_menu_summary():
+    """Get restaurant menu summary"""
+    try:
+        uid = get_current_user_id()
+        summary = restaurant_service.get_restaurant_menu_summary(uid)
+        
+        return jsonify({
+            'success': True,
+            'data': summary
+        })
     except Exception as e:
         return jsonify({
             'success': False,
