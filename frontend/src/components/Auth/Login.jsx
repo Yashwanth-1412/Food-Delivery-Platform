@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+// Enhanced Login.jsx with artistic left side
+import React, { useState, useEffect } from 'react';
 import { authService } from '../../firebase/auth';
 import { roleService } from '../../services/roleapi';
 
@@ -9,9 +10,10 @@ const Login = ({ onLoginSuccess }) => {
   const [isSignUp, setIsSignUp] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [step, setStep] = useState('auth'); // 'auth' or 'roleValidation'
+  const [step, setStep] = useState('auth');
   const [user, setUser] = useState(null);
   const [existingRole, setExistingRole] = useState(null);
+  const [currentImageIndex, setCurrentImageIndex] = useState(0);
 
   const roles = [
     {
@@ -44,6 +46,22 @@ const Login = ({ onLoginSuccess }) => {
     }
   ];
 
+  const foodImages = [
+    "https://images.unsplash.com/photo-1568901346375-23c9450c58cd?w=800&h=600&fit=crop&crop=center",
+    "https://images.unsplash.com/photo-1555939594-58d7cb561ad1?w=800&h=600&fit=crop&crop=center",
+    "https://images.unsplash.com/photo-1540189549336-e6e99c3679fe?w=800&h=600&fit=crop&crop=center",
+    "https://images.unsplash.com/photo-1567620905732-2d1ec7ab7445?w=800&h=600&fit=crop&crop=center",
+    "https://images.unsplash.com/photo-1551782450-a2132b4ba21d?w=800&h=600&fit=crop&crop=center",
+  ];
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setCurrentImageIndex((prev) => (prev + 1) % foodImages.length);
+    }, 4000);
+    return () => clearInterval(interval);
+  }, [foodImages.length]);
+
+  // All the handler functions remain the same...
   const handleAuthSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
@@ -53,27 +71,14 @@ const Login = ({ onLoginSuccess }) => {
       let authenticatedUser;
       
       if (isSignUp) {
-        // Sign up new user
         authenticatedUser = await authService.signUp(email, password);
-        console.log('✅ New user signed up:', authenticatedUser.email);
-        
-        // For new users, assign the selected role
         await assignRoleToUser(authenticatedUser, selectedRole);
-        
-        // Success - proceed to dashboard
         onLoginSuccess(authenticatedUser, { role: selectedRole });
-        
       } else {
-        // Sign in existing user
         authenticatedUser = await authService.signIn(email, password);
-        console.log('✅ User signed in:', authenticatedUser.email);
-        
-        // Check existing role from backend
         await validateExistingUserRole(authenticatedUser);
       }
-      
     } catch (error) {
-      console.error('Auth error:', error);
       setError(getErrorMessage(error.code || error.message));
     } finally {
       setLoading(false);
@@ -82,52 +87,24 @@ const Login = ({ onLoginSuccess }) => {
 
   const assignRoleToUser = async (user, role) => {
     try {
-      console.log('🔄 Assigning role to new user:', role);
-      
-      // Wait a moment for Firebase token to be ready
       await new Promise(resolve => setTimeout(resolve, 1000));
-      
-      const response = await roleService.assignRole(user.uid, role);
-      console.log('✅ Role assigned successfully:', response);
-      
+      await roleService.assignRole(user.uid, role);
     } catch (error) {
       console.error('❌ Error assigning role:', error);
-      // For new users, we'll proceed anyway and let them in
-      // The role assignment can be handled later
-      console.log('⚠️ Proceeding without backend role assignment');
     }
   };
 
   const validateExistingUserRole = async (user) => {
     try {
-      console.log('🔍 Checking existing user role...');
-      
-      // Wait a moment for Firebase token to be ready
       await new Promise(resolve => setTimeout(resolve, 500));
-      
       const roleData = await roleService.getMyRole();
-      console.log('✅ Existing role found:', roleData);
-      
       setExistingRole(roleData.role);
       setUser(user);
       setStep('roleValidation');
-      
     } catch (error) {
-      console.error('❌ Error fetching existing role:', error);
-      
-      if (error.response?.status === 404) {
-        // No role found - treat as new user
-        console.log('ℹ️ No existing role found, treating as new user');
-        setUser(user);
-        setStep('roleValidation');
-        setExistingRole(null);
-      } else {
-        // Other error - let them choose role
-        console.log('⚠️ Error fetching role, allowing role selection');
-        setUser(user);
-        setStep('roleValidation');
-        setExistingRole(null);
-      }
+      setUser(user);
+      setStep('roleValidation');
+      setExistingRole(null);
     }
   };
 
@@ -137,21 +114,16 @@ const Login = ({ onLoginSuccess }) => {
 
     try {
       if (existingRole) {
-        // Existing user - validate role matches
         if (selectedRole === existingRole) {
-          console.log('✅ Role validation successful');
           onLoginSuccess(user, { role: selectedRole });
         } else {
-          setError(`Your account is registered as ${existingRole}. Please select the correct role or contact support.`);
+          setError(`Your account is registered as ${existingRole}. Please select the correct role.`);
         }
       } else {
-        // No existing role - assign new role
         await assignRoleToUser(user, selectedRole);
-        console.log('✅ New role assigned to existing user');
         onLoginSuccess(user, { role: selectedRole });
       }
     } catch (error) {
-      console.error('❌ Role validation error:', error);
       setError('Failed to validate role. Please try again.');
     } finally {
       setLoading(false);
@@ -164,13 +136,8 @@ const Login = ({ onLoginSuccess }) => {
 
     try {
       const authenticatedUser = await authService.signInWithGoogle();
-      console.log('✅ Google sign in successful:', authenticatedUser.email);
-      
-      // Check if user has existing role
       await validateExistingUserRole(authenticatedUser);
-      
     } catch (error) {
-      console.error('Google sign in error:', error);
       setError(getErrorMessage(error.code));
     } finally {
       setLoading(false);
@@ -185,318 +152,412 @@ const Login = ({ onLoginSuccess }) => {
   };
 
   const getErrorMessage = (errorCode) => {
-    switch (errorCode) {
-      case 'auth/user-not-found':
-        return 'No account found with this email address.';
-      case 'auth/wrong-password':
-        return 'Incorrect password.';
-      case 'auth/email-already-in-use':
-        return 'An account with this email already exists.';
-      case 'auth/weak-password':
-        return 'Password should be at least 6 characters.';
-      case 'auth/invalid-email':
-        return 'Invalid email address.';
-      case 'auth/popup-closed-by-user':
-        return 'Google sign-in was cancelled.';
-      default:
-        return typeof errorCode === 'string' ? errorCode : 'An error occurred. Please try again.';
-    }
+    const messages = {
+      'auth/user-not-found': 'No account found with this email address.',
+      'auth/wrong-password': 'Incorrect password.',
+      'auth/email-already-in-use': 'An account with this email already exists.',
+      'auth/weak-password': 'Password should be at least 6 characters.',
+      'auth/invalid-email': 'Invalid email address.',
+      'auth/popup-closed-by-user': 'Google sign-in was cancelled.',
+    };
+    return messages[errorCode] || 'An error occurred. Please try again.';
   };
 
-  const getColorClasses = (color) => {
-    const colorMap = {
-      blue: 'border-blue-200 bg-blue-50 text-blue-800 ring-blue-500',
-      green: 'border-green-200 bg-green-50 text-green-800 ring-green-500',
-      purple: 'border-purple-200 bg-purple-50 text-purple-800 ring-purple-500',
-      red: 'border-red-200 bg-red-50 text-red-800 ring-red-500'
-    };
-    return colorMap[color] || colorMap.blue;
+  const handleForgotPassword = async () => {
+    if (!email) {
+      setError('Please enter your email address first');
+      return;
+    }
+
+    try {
+      await authService.sendPasswordResetEmail(email);
+      alert('Password reset email sent! Check your inbox.');
+    } catch (error) {
+      setError(error.message);
+    }
   };
 
   // Role Validation Step
   if (step === 'roleValidation') {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
-        <div className="max-w-md w-full space-y-8 bg-white rounded-xl shadow-lg p-8">
-          <div>
-            <div className="mx-auto h-12 w-12 bg-indigo-600 rounded-full flex items-center justify-center">
-              <svg className="h-6 w-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
+      <div className="min-h-screen flex">
+        {/* Enhanced Left Side - Role Validation */}
+        <div className="w-1/2 relative overflow-hidden">
+          {/* Food-themed Background */}
+          <div className="absolute inset-0 bg-gradient-to-br from-orange-900/80 via-red-900/80 to-yellow-900/80">
+            {/* Food-themed Floating Elements */}
+            <div className="absolute inset-0">
+              <div className="absolute top-20 left-20 w-32 h-32 bg-orange-400 bg-opacity-20 rounded-full animate-pulse"></div>
+              <div className="absolute top-40 right-32 w-24 h-24 bg-red-400 bg-opacity-20 rounded-full animate-bounce delay-1000"></div>
+              <div className="absolute bottom-32 left-32 w-20 h-20 bg-yellow-400 bg-opacity-20 rounded-full animate-ping delay-2000"></div>
+              <div className="absolute bottom-40 right-20 w-16 h-16 bg-orange-300 bg-opacity-30 rounded-full animate-pulse delay-3000"></div>
             </div>
-            <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900">
-              {existingRole ? 'Verify Your Role' : 'Select Your Role'}
-            </h2>
-            <p className="mt-2 text-center text-sm text-gray-600">
-              Welcome back, {user?.email}
-            </p>
             
-            {existingRole && (
-              <div className="mt-4 p-4 bg-blue-50 rounded-lg">
-                <p className="text-sm text-blue-800">
-                  <strong>Your registered role:</strong> {roles.find(r => r.value === existingRole)?.label}
-                </p>
-                <p className="text-xs text-blue-600 mt-1">
-                  Please select the same role to continue
-                </p>
-              </div>
-            )}
+            {/* Warm Gradient Overlay */}
+            <div className="absolute inset-0 bg-gradient-to-tr from-black/30 via-transparent to-black/40"></div>
           </div>
 
-          {error && (
-            <div className="bg-red-50 border border-red-300 text-red-700 px-4 py-3 rounded-lg">
-              <div className="flex">
-                <div className="flex-shrink-0">
-                  <svg className="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
-                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
-                  </svg>
-                </div>
-                <div className="ml-3">
-                  <p className="text-sm">{error}</p>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Role Selection */}
-          <div className="space-y-3">
-            <label className="block text-sm font-medium text-gray-700">
-              {existingRole ? 'Confirm your role' : 'Select your role'}
-            </label>
-            <div className="grid grid-cols-2 gap-3">
-              {roles.map((role) => {
-                const isCorrectRole = !existingRole || role.value === existingRole;
-                const isSelected = selectedRole === role.value;
-                
-                return (
-                  <div
-                    key={role.value}
-                    className={`
-                      relative cursor-pointer rounded-lg border p-3 flex flex-col items-center text-center transition-all
-                      ${!isCorrectRole 
-                        ? 'border-gray-200 bg-gray-50 opacity-50 cursor-not-allowed' 
-                        : isSelected 
-                          ? `ring-2 ${getColorClasses(role.color)}` 
-                          : 'border-gray-200 bg-white hover:border-gray-300'
-                      }
-                    `}
-                    onClick={() => isCorrectRole && setSelectedRole(role.value)}
-                  >
-                    <div className="text-2xl mb-1">{role.icon}</div>
-                    <div className="text-sm font-medium text-gray-900">{role.label}</div>
-                    <div className="text-xs text-gray-500 mt-1">{role.description}</div>
-                    {isCorrectRole && (
-                      <input
-                        type="radio"
-                        name="role"
-                        value={role.value}
-                        checked={isSelected}
-                        onChange={() => setSelectedRole(role.value)}
-                        className="absolute top-2 right-2 h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300"
-                      />
-                    )}
-                    {existingRole && role.value === existingRole && (
-                      <div className="absolute -top-1 -right-1 bg-green-500 text-white text-xs px-2 py-1 rounded-full">
-                        ✓ Your Role
-                      </div>
-                    )}
+          {/* Content Container */}
+          <div className="relative z-10 h-full flex items-center justify-center p-12">
+            <div className="max-w-md w-full">
+              {/* Glass Card with Warm Theme */}
+              <div className="backdrop-blur-xl bg-black/20 border border-white/30 rounded-3xl p-8 shadow-2xl">
+                {/* Header with Logo */}
+                <div className="text-center mb-8">
+                  <div className="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-r from-orange-500 to-red-600 rounded-2xl mb-4 shadow-lg">
+                    <span className="text-3xl">🍽️</span>
                   </div>
-                );
-              })}
+                  <h1 className="text-3xl font-bold text-white mb-2 tracking-tight">Role Selection</h1>
+                  <div className="w-16 h-1 bg-gradient-to-r from-orange-500 to-red-600 mx-auto rounded-full"></div>
+                </div>
+
+                {/* Welcome Message */}
+                <div className="text-center mb-6">
+                  <p className="text-white/90 text-lg">Welcome back!</p>
+                  <p className="text-white/70 text-sm">{user?.email}</p>
+                  
+                  {existingRole && (
+                    <div className="mt-4 p-4 bg-orange-500/20 rounded-xl border border-orange-400/30">
+                      <p className="text-orange-200 text-sm">
+                        <strong>Your registered role:</strong> {roles.find(r => r.value === existingRole)?.label}
+                      </p>
+                    </div>
+                  )}
+                </div>
+
+                {/* Error Message */}
+                {error && (
+                  <div className="mb-6 p-4 bg-red-600/20 rounded-xl border border-red-500/30">
+                    <p className="text-red-200 text-sm">{error}</p>
+                  </div>
+                )}
+
+                {/* Role Grid */}
+                <div className="grid grid-cols-2 gap-3 mb-6">
+                  {roles.map((role) => {
+                    const isCorrectRole = !existingRole || role.value === existingRole;
+                    const isSelected = selectedRole === role.value;
+                    
+                    return (
+                      <div
+                        key={role.value}
+                        className={`
+                          relative cursor-pointer rounded-xl p-4 text-center transition-all duration-300 transform hover:scale-105
+                          ${!isCorrectRole 
+                            ? 'bg-white/5 border border-white/10 opacity-50 cursor-not-allowed' 
+                            : isSelected 
+                              ? 'bg-gradient-to-br from-orange-500/30 to-red-600/30 border border-orange-400/60 shadow-lg' 
+                              : 'bg-black/20 border border-white/30 hover:bg-black/30'
+                          }
+                        `}
+                        onClick={() => isCorrectRole && setSelectedRole(role.value)}
+                      >
+                        <div className="text-2xl mb-2">{role.icon}</div>
+                        <div className="text-white text-sm font-medium">{role.label}</div>
+                        <div className="text-white/70 text-xs mt-1">{role.description}</div>
+                        {isSelected && (
+                          <div className="absolute -top-2 -right-2 w-6 h-6 bg-gradient-to-r from-orange-500 to-red-600 rounded-full flex items-center justify-center">
+                            <span className="text-white text-xs">✓</span>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* Action Buttons */}
+                <div className="space-y-3">
+                  <button
+                    onClick={handleRoleValidation}
+                    disabled={loading || (existingRole && selectedRole !== existingRole)}
+                    className="w-full bg-gradient-to-r from-orange-600 to-red-700 hover:from-orange-700 hover:to-red-800 text-white py-3 px-4 rounded-xl font-medium transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed transform hover:scale-[1.02] active:scale-[0.98] shadow-lg"
+                  >
+                    {loading ? (
+                      <span className="flex items-center justify-center">
+                        <div className="animate-spin h-5 w-5 border-2 border-white border-t-transparent rounded-full mr-2"></div>
+                        Validating...
+                      </span>
+                    ) : (
+                      `Continue as ${roles.find(r => r.value === selectedRole)?.label}`
+                    )}
+                  </button>
+                  
+                  <button
+                    onClick={handleBackToAuth}
+                    className="w-full bg-black/30 hover:bg-black/40 text-white py-3 px-4 rounded-xl font-medium transition-all duration-300 backdrop-blur-sm border border-white/20"
+                  >
+                    Back to Login
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
+        </div>
 
-          <div className="space-y-3">
-            <button
-              onClick={handleRoleValidation}
-              disabled={loading || (existingRole && selectedRole !== existingRole)}
-              className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-semibold px-6 py-3 rounded-lg transition-colors duration-200 shadow-md hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {loading ? (
-                <div className="flex items-center justify-center">
-                  <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                  </svg>
-                  Validating...
-                </div>
-              ) : (
-                `Continue as ${roles.find(r => r.value === selectedRole)?.label}`
-              )}
-            </button>
-            
-            <button
-              onClick={handleBackToAuth}
-              className="w-full bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold px-6 py-3 rounded-lg transition-colors duration-200"
-            >
-              Back to Login
-            </button>
+        {/* Right side remains the same */}
+        <div className="w-1/2 relative overflow-hidden">
+          <div className="absolute inset-0">
+            {foodImages.map((image, index) => (
+              <div
+                key={index}
+                className={`absolute inset-0 transition-opacity duration-1000 ${
+                  index === currentImageIndex ? 'opacity-100' : 'opacity-0'
+                }`}
+              >
+                <img src={image} alt={`Food ${index + 1}`} className="w-full h-full object-cover" />
+              </div>
+            ))}
+          </div>
+          <div className="absolute inset-0 bg-gradient-to-b from-black/20 via-transparent to-black/30"></div>
+          <div className="relative z-10 h-full flex flex-col justify-center items-center text-center p-12">
+            <div className="text-white">
+              <h2 className="text-5xl font-bold mb-4 leading-tight drop-shadow-lg">Role Selection</h2>
+              <p className="text-xl mb-8 text-gray-200 max-w-md drop-shadow-md">Choose your role to access the platform</p>
+            </div>
+            <div className="absolute bottom-8 left-1/2 transform -translate-x-1/2 flex space-x-2">
+              {foodImages.map((_, index) => (
+                <button
+                  key={index}
+                  onClick={() => setCurrentImageIndex(index)}
+                  className={`w-3 h-3 rounded-full transition-all duration-300 ${
+                    index === currentImageIndex ? 'bg-white scale-125' : 'bg-white bg-opacity-50 hover:bg-opacity-75'
+                  }`}
+                />
+              ))}
+            </div>
           </div>
         </div>
       </div>
     );
   }
 
-  // Authentication Step (Login/Signup)
+  // Enhanced Authentication Step (Login/Signup)
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-md w-full space-y-8 bg-white rounded-xl shadow-lg p-8">
-        <div>
-          <div className="mx-auto h-12 w-12 bg-indigo-600 rounded-full flex items-center justify-center">
-            <svg className="h-6 w-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-            </svg>
+    <div className="min-h-screen flex">
+      {/* Enhanced Left Side - Authentication */}
+      <div className="w-55/100 relative overflow-hidden">
+        {/* Food-themed Background */}
+        <div className="absolute inset-0 bg-gradient-to-br from-gray-700 via-gray-800 to-gray-900">
+          {/* Food-themed Floating Elements */}
+          <div className="absolute inset-0">
+            {/* Large floating elements with food theme */}
+            <div className="absolute top-1/4 left-1/4 w-40 h-40 bg-gradient-to-r from-orange-400/20 to-red-500/20 rounded-full animate-pulse"></div>
+            <div className="absolute top-3/4 right-1/4 w-32 h-32 bg-gradient-to-r from-yellow-400/20 to-orange-500/20 rounded-full animate-bounce delay-1000"></div>
+            <div className="absolute top-1/2 left-1/6 w-24 h-24 bg-gradient-to-r from-red-400/20 to-orange-500/20 rounded-full animate-ping delay-2000"></div>
+            
+            {/* Small floating particles */}
+            <div className="absolute top-20 right-20 w-8 h-8 bg-orange-300/20 rounded-full animate-pulse delay-500"></div>
+            <div className="absolute top-60 left-16 w-6 h-6 bg-red-300/20 rounded-full animate-bounce delay-1500"></div>
+            <div className="absolute bottom-40 right-32 w-10 h-10 bg-yellow-400/20 rounded-full animate-ping delay-3000"></div>
+            <div className="absolute bottom-20 left-20 w-4 h-4 bg-orange-400/30 rounded-full animate-pulse delay-2500"></div>
           </div>
-          <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900">
-            {isSignUp ? 'Create your account' : 'Sign in to your account'}
-          </h2>
-          <p className="mt-2 text-center text-sm text-gray-600">
-            {isSignUp ? 'Join us today' : 'Welcome back'}
-          </p>
+          
+          {/* Warm Gradient Overlays */}
+          <div className="absolute inset-0 bg-gradient-to-tr from-black/30 via-transparent to-black/40"></div>
+          <div className="absolute inset-0 bg-gradient-to-bl from-transparent via-orange-500/5 to-transparent"></div>
         </div>
 
-        <form className="mt-8 space-y-6" onSubmit={handleAuthSubmit}>
-          {error && (
-            <div className="bg-red-50 border border-red-300 text-red-700 px-4 py-3 rounded-lg">
-              <div className="flex">
-                <div className="flex-shrink-0">
-                  <svg className="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
-                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
-                  </svg>
+        {/* Content Container */}
+        <div className="relative z-10 h-full flex items-center justify-center p-8">
+          <div className="max-w-xl w-full">
+            {/* Glass Card with Warm Theme */}
+            <div className="backdrop-blur-xl bg-black/20 border border-white/30 rounded-3xl p-8 shadow-2xl min-h-[600px]">
+              {/* Header with Enhanced Logo */}
+              <div className="text-center mb-8">
+                <div className="inline-flex items-center justify-center w-20 h-20 bg-gradient-to-r from-orange-500 to-red-600 rounded-3xl mb-6 shadow-2xl transform hover:scale-105 transition-transform duration-300">
+                  <span className="text-4xl">🍽️</span>
                 </div>
-                <div className="ml-3">
-                  <p className="text-sm">{error}</p>
-                </div>
+                <h1 className="text-4xl font-bold text-white mb-2 tracking-tight">
+                  {isSignUp ? 'Join Us' : 'Welcome Back'}
+                </h1>
+                <div className="w-20 h-1 bg-gradient-to-r from-orange-500 to-red-600 mx-auto rounded-full mb-4"></div>
+                <p className="text-white/80 text-lg">
+                  {isSignUp ? 'Create your food delivery account' : 'Sign in to continue your journey'}
+                </p>
               </div>
-            </div>
-          )}
 
-          {/* Role Selection for Sign Up */}
-          {isSignUp && (
-            <div className="space-y-3">
-              <label className="block text-sm font-medium text-gray-700">
-                Select your role
-              </label>
-              <div className="grid grid-cols-2 gap-3">
-                {roles.map((role) => (
-                  <div
-                    key={role.value}
-                    className={`
-                      relative cursor-pointer rounded-lg border p-3 flex flex-col items-center text-center transition-all
-                      ${selectedRole === role.value 
-                        ? `ring-2 ${getColorClasses(role.color)}` 
-                        : 'border-gray-200 bg-white hover:border-gray-300'
-                      }
-                    `}
-                    onClick={() => setSelectedRole(role.value)}
-                  >
-                    <div className="text-2xl mb-1">{role.icon}</div>
-                    <div className="text-sm font-medium text-gray-900">{role.label}</div>
-                    <div className="text-xs text-gray-500 mt-1">{role.description}</div>
-                    <input
-                      type="radio"
-                      name="role"
-                      value={role.value}
-                      checked={selectedRole === role.value}
-                      onChange={() => setSelectedRole(role.value)}
-                      className="absolute top-2 right-2 h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300"
-                    />
+              {/* Error Message */}
+              {error && (
+                <div className="mb-6 p-4 bg-red-600/20 rounded-xl border border-red-500/30 backdrop-blur-sm">
+                  <p className="text-red-200 text-sm flex items-center">
+                    <span className="mr-2">⚠️</span>
+                    {error}
+                  </p>
+                </div>
+              )}
+
+              {/* Form */}
+              <form className="space-y-6" onSubmit={handleAuthSubmit}>
+                {/* Role Selection for Sign Up */}
+                {isSignUp && (
+                  <div className="space-y-4">
+                    <label className="block text-white/90 text-sm font-medium">
+                      Choose your role
+                    </label>
+                    <div className="grid grid-cols-2 gap-3">
+                      {roles.map((role) => (
+                        <div
+                          key={role.value}
+                          className={`
+                            relative cursor-pointer rounded-xl p-3 text-center transition-all duration-300 transform hover:scale-105
+                            ${selectedRole === role.value 
+                              ? 'bg-gradient-to-br from-orange-400/30 to-pink-500/30 border border-orange-400/60 shadow-lg' 
+                              : 'bg-white/10 border border-white/20 hover:bg-white/20'
+                            }
+                          `}
+                          onClick={() => setSelectedRole(role.value)}
+                        >
+                          <div className="text-xl mb-1">{role.icon}</div>
+                          <div className="text-white text-xs font-medium">{role.label}</div>
+                          <div className="text-white/70 text-xs mt-1">{role.description}</div>
+                          {selectedRole === role.value && (
+                            <div className="absolute -top-1 -right-1 w-5 h-5 bg-gradient-to-r from-orange-500 to-red-600 rounded-full flex items-center justify-center">
+                              <span className="text-white text-xs">✓</span>
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
                   </div>
-                ))}
-              </div>
+                )}
+
+                {/* Email Input */}
+                <div className="relative">
+                  <input
+                    type="email"
+                    placeholder="Email Address"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    required
+                    className="w-full px-4 py-4 bg-black/20 border border-white/30 rounded-xl text-white placeholder-white/60 focus:ring-2 focus:ring-orange-500 focus:border-transparent transition-all duration-300 backdrop-blur-sm"
+                  />
+                  <div className="absolute inset-0 rounded-xl bg-gradient-to-r from-orange-500/20 to-red-600/20 opacity-0 hover:opacity-100 transition-opacity duration-300 pointer-events-none"></div>
+                </div>
+
+                {/* Password Input */}
+                <div className="relative">
+                  <input
+                    type="password"
+                    placeholder="Password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    required
+                    className="w-full px-4 py-4 bg-black/20 border border-white/30 rounded-xl text-white placeholder-white/60 focus:ring-2 focus:ring-orange-500 focus:border-transparent transition-all duration-300 backdrop-blur-sm"
+                  />
+                  <div className="absolute inset-0 rounded-xl bg-gradient-to-r from-orange-500/20 to-red-600/20 opacity-0 hover:opacity-100 transition-opacity duration-300 pointer-events-none"></div>
+                </div>
+
+                {/* Forgot Password */}
+                {!isSignUp && (
+                  <div className="text-right">
+                    <button
+                      type="button"
+                      onClick={handleForgotPassword}
+                      className="text-orange-300 hover:text-orange-200 text-sm font-medium transition-colors duration-300"
+                    >
+                      Forgot Password?
+                    </button>
+                  </div>
+                )}
+
+                {/* Submit Button */}
+                <button
+                  type="submit"
+                  disabled={loading}
+                  className="w-full bg-gradient-to-r from-orange-600 to-red-700 hover:from-orange-700 hover:to-red-800 text-white py-4 px-4 rounded-xl font-medium transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed transform hover:scale-[1.02] active:scale-[0.98] shadow-lg"
+                >
+                  {loading ? (
+                    <span className="flex items-center justify-center">
+                      <div className="animate-spin h-5 w-5 border-2 border-white border-t-transparent rounded-full mr-2"></div>
+                      {isSignUp ? 'Creating Account...' : 'Signing In...'}
+                    </span>
+                  ) : (
+                    <span className="flex items-center justify-center">
+                      {isSignUp ? 'Create Account' : 'Sign In'}
+                      <span className="ml-2">→</span>
+                    </span>
+                  )}
+                </button>
+
+                {/* Divider */}
+                <div className="relative">
+                  <div className="absolute inset-0 flex items-center">
+                    <div className="w-full border-t border-white/30" />
+                  </div>
+                  <div className="relative flex justify-center text-sm">
+                    <span className="px-4 bg-transparent text-white/70">or continue with</span>
+                  </div>
+                </div>
+
+                {/* Google Sign In */}
+                <button
+                  type="button"
+                  onClick={handleGoogleSignIn}
+                  className="w-full flex items-center justify-center px-4 py-4 bg-black/20 border border-white/30 rounded-xl hover:bg-black/30 transition-all duration-300 transform hover:scale-[1.02] active:scale-[0.98] backdrop-blur-sm"
+                >
+                  <svg className="w-5 h-5 mr-3" viewBox="0 0 24 24">
+                    <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+                    <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+                    <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
+                    <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
+                  </svg>
+                  <span className="text-white font-medium">Continue with Google</span>
+                </button>
+
+                {/* Toggle Sign Up/In */}
+                <div className="text-center">
+                  <p className="text-white/70">
+                    {isSignUp ? "Already have an account?" : "Don't have an account?"}{' '}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsSignUp(!isSignUp);
+                        setError('');
+                      }}
+                      className="text-orange-300 hover:text-orange-200 font-medium transition-colors duration-300 underline underline-offset-2"
+                    >
+                      {isSignUp ? 'Sign In' : 'Sign Up'}
+                    </button>
+                  </p>
+                </div>
+              </form>
             </div>
-          )}
-          
-          <div className="space-y-4">
-            <div>
-              <label htmlFor="email" className="block text-sm font-medium text-gray-700">
-                Email address
-              </label>
-              <input
-                id="email"
-                name="email"
-                type="email"
-                autoComplete="email"
-                required
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
-                placeholder="Enter your email"
+          </div>
+        </div>
+      </div>
+
+      {/* Right side - Sliding Images (remains the same) */}
+      <div className="w-1/2 relative overflow-hidden">
+        <div className="absolute inset-0">
+          {foodImages.map((image, index) => (
+            <div
+              key={index}
+              className={`absolute inset-0 transition-opacity duration-1000 ${
+                index === currentImageIndex ? 'opacity-100' : 'opacity-0'
+              }`}
+            >
+              <img src={image} alt={`Food ${index + 1}`} className="w-full h-full object-cover" />
+            </div>
+          ))}
+        </div>
+        <div className="absolute inset-0 bg-gradient-to-b from-black/20 via-transparent to-black/30"></div>
+        <div className="relative z-10 h-full flex flex-col justify-center items-center text-center p-12">
+          <div className="text-white">
+            <h2 className="text-5xl font-bold mb-4 leading-tight drop-shadow-lg">Delicious Food</h2>
+            <p className="text-xl mb-8 text-gray-200 max-w-md drop-shadow-md">Delivered Fresh to Your Door</p>
+          </div>
+          <div className="absolute bottom-8 left-1/2 transform -translate-x-1/2 flex space-x-2">
+            {foodImages.map((_, index) => (
+              <button
+                key={index}
+                onClick={() => setCurrentImageIndex(index)}
+                className={`w-3 h-3 rounded-full transition-all duration-300 ${
+                  index === currentImageIndex ? 'bg-white scale-125' : 'bg-white bg-opacity-50 hover:bg-opacity-75'
+                }`}
               />
-            </div>
-            <div>
-              <label htmlFor="password" className="block text-sm font-medium text-gray-700">
-                Password
-              </label>
-              <input
-                id="password"
-                name="password"
-                type="password"
-                autoComplete={isSignUp ? "new-password" : "current-password"}
-                required
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
-                placeholder="Enter your password"
-              />
-            </div>
+            ))}
           </div>
-
-          <div>
-            <button
-              type="submit"
-              disabled={loading}
-              className="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {loading ? (
-                <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                </svg>
-              ) : null}
-              {loading ? 'Loading...' : `${isSignUp ? 'Sign up' : 'Sign in'}`}
-            </button>
-          </div>
-
-          <div className="relative">
-            <div className="absolute inset-0 flex items-center">
-              <div className="w-full border-t border-gray-300" />
-            </div>
-            <div className="relative flex justify-center text-sm">
-              <span className="px-2 bg-white text-gray-500">Or continue with</span>
-            </div>
-          </div>
-
-          <div>
-            <button
-              type="button"
-              onClick={handleGoogleSignIn}
-              disabled={loading}
-              className="w-full flex justify-center py-2 px-4 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              <svg className="w-5 h-5 mr-2" viewBox="0 0 24 24">
-                <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
-                <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
-                <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
-                <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
-              </svg>
-              Continue with Google
-            </button>
-          </div>
-
-          <div className="text-center">
-            <button
-              type="button"
-              onClick={() => {
-                setIsSignUp(!isSignUp);
-                setError('');
-              }}
-              className="text-indigo-600 hover:text-indigo-500 text-sm font-medium"
-            >
-              {isSignUp ? 'Already have an account? Sign in' : "Don't have an account? Sign up"}
-            </button>
-          </div>
-        </form>
+        </div>
       </div>
     </div>
   );

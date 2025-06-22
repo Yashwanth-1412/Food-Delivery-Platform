@@ -1,7 +1,8 @@
-// frontend/src/components/Router/RoleBasedRouter.jsx - UPDATED
+// frontend/src/components/Router/RoleBasedRouter.jsx - Updated with Real AgentApp
 import React from 'react';
 import RestaurantApp from '../Restaurant/RestaurantApp';
 import CustomerApp from '../Customer/CustomerApp';
+import AgentApp from '../Agent/AgentApp';
 
 // No Role/Pending Access Component
 const NoAccessComponent = ({ user, onLogout }) => (
@@ -51,48 +52,14 @@ const RestaurantDashboard = ({ user, userRole, onLogout }) => (
   </div>
 );
 
-// Agent Dashboard (Placeholder)
-const AgentApp = ({ user, userRole, onLogout }) => (
-  <div className="min-h-screen bg-gradient-to-br from-green-50 to-emerald-100 p-8">
-    <div className="max-w-6xl mx-auto">
-      <div className="bg-white rounded-xl shadow-lg p-8 text-center">
-        <div className="mx-auto h-16 w-16 bg-green-100 rounded-full flex items-center justify-center mb-6">
-          <svg className="h-8 w-8 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-          </svg>
-        </div>
-        <h1 className="text-3xl font-bold text-gray-900 mb-4">🚚 Delivery Agent Dashboard</h1>
-        <p className="text-gray-600 mb-4">Welcome, {user?.displayName || user?.email}</p>
-        <p className="text-gray-500 text-sm mb-8">Role: {userRole?.role}</p>
-        <button 
-          onClick={onLogout}
-          className="mb-8 bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg transition-colors"
-        >
-          Sign Out
-        </button>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          <div className="bg-green-50 p-6 rounded-lg">
-            <h3 className="font-semibold text-green-800">Available Orders</h3>
-            <p className="text-green-600 text-sm mt-2">Pick up new delivery orders</p>
-          </div>
-          <div className="bg-blue-50 p-6 rounded-lg">
-            <h3 className="font-semibold text-blue-800">Active Deliveries</h3>
-            <p className="text-blue-600 text-sm mt-2">Track ongoing deliveries</p>
-          </div>
-          <div className="bg-purple-50 p-6 rounded-lg">
-            <h3 className="font-semibold text-purple-800">Earnings</h3>
-            <p className="text-purple-600 text-sm mt-2">View your delivery earnings</p>
-          </div>
-        </div>
-        <div className="mt-8 text-center">
-          <p className="text-gray-500 text-sm">🚧 Agent dashboard coming soon!</p>
-        </div>
-      </div>
-    </div>
+// Agent Dashboard Component (Now Real!)
+const AgentDashboard = ({ user, userRole, onLogout }) => (
+  <div className="min-h-screen bg-gray-50">
+    <AgentApp user={user} userRole={userRole} onLogout={onLogout} />
   </div>
 );
 
-// Admin Dashboard (Placeholder)
+// Admin Dashboard (Still Placeholder)
 const AdminApp = ({ user, userRole, onLogout }) => (
   <div className="min-h-screen bg-gradient-to-br from-purple-50 to-indigo-100 p-8">
     <div className="max-w-6xl mx-auto">
@@ -148,7 +115,7 @@ const RoleBasedRouter = ({ user, userRole, onLogout }) => {
       return <RestaurantDashboard user={user} userRole={userRole} onLogout={onLogout} />;
     
     case 'agent':
-      return <AgentApp user={user} userRole={userRole} onLogout={onLogout} />;
+      return <AgentDashboard user={user} userRole={userRole} onLogout={onLogout} />;
     
     case 'admin':
       return <AdminApp user={user} userRole={userRole} onLogout={onLogout} />;

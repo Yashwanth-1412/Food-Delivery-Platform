@@ -1,5 +1,4 @@
-# Simple CORS fix from the post - Update your backend/app.py
-
+# backend/app.py - Add agent routes
 from flask import Flask, jsonify
 from flask_cors import CORS
 from dotenv import load_dotenv
@@ -24,13 +23,14 @@ from routes.auth import auth_bp
 from routes.roles import roles_bp
 from routes.restaurants import restaurants_bp
 from routes.customer import customer_bp
+from routes.agent import agent_bp  # Add agent routes
 
 def create_app():
     """Application factory pattern"""
     app = Flask(__name__)
     
-    # Simple CORS setup as shown in the post
-    CORS(app)  # This allows all origins for development
+    # Simple CORS setup for development
+    CORS(app)
     
     # Register blueprints
     app.register_blueprint(profile_bp)
@@ -39,15 +39,16 @@ def create_app():
     app.register_blueprint(roles_bp)
     app.register_blueprint(restaurants_bp)
     app.register_blueprint(customer_bp)
+    app.register_blueprint(agent_bp)  # Register agent routes
     
     # Basic routes
     @app.route('/')
     def home():
         return jsonify({
-            "message": "🚀 Food Delivery Backend with Customer & Restaurant Management",
+            "message": "🚀 Food Delivery Backend - Full Multi-Role Platform",
             "status": "healthy",
             "firebase_connected": firebase_initialized,
-            "version": "3.2 - Customer Phase",
+            "version": "4.0 - Agent Interface Added",
             "cors_enabled": True,
             "available_endpoints": {
                 "auth": [
@@ -79,6 +80,16 @@ def create_app():
                     "GET /api/restaurants/orders",
                     "PUT /api/restaurants/orders/<id>/status"
                 ],
+                "agent": [
+                    "GET /api/agent/available-orders",
+                    "POST /api/agent/orders/<id>/accept",
+                    "GET /api/agent/active-orders",
+                    "PUT /api/agent/orders/<id>/status",
+                    "GET /api/agent/delivery-history",
+                    "GET /api/agent/earnings",
+                    "GET/PUT /api/agent/profile",
+                    "PUT /api/agent/status"
+                ],
                 "roles": [
                     "POST /api/roles/assign",
                     "PUT /api/roles/update", 
@@ -93,16 +104,13 @@ def create_app():
         return jsonify({
             "status": "healthy",
             "firebase_connected": firebase_initialized,
-            "customer_features": "enabled",
+            "features_enabled": [
+                "customer_ordering",
+                "restaurant_management", 
+                "agent_delivery",
+                "role_based_access"
+            ],
             "cors": "enabled_for_all_origins"
-        })
-    
-    # Test endpoint for customer restaurants
-    @app.route('/api/test')
-    def test_endpoint():
-        return jsonify({
-            "message": "Test endpoint working",
-            "cors_test": "success"
         })
     
     return app
@@ -115,6 +123,6 @@ if __name__ == '__main__':
     print("🌐 CORS enabled for all origins (development mode)")
     print("📍 Available at: http://localhost:5000")
     print("📍 Health check: http://localhost:5000/api/health")
-    print("📍 Test endpoint: http://localhost:5000/api/test")
+    print("✨ Features: Customer, Restaurant, Agent, Admin")
     
     app.run(debug=True, port=5000, host='0.0.0.0')
