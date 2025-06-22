@@ -9,6 +9,7 @@ restaurants_bp = Blueprint('restaurants', __name__, url_prefix='/api/restaurants
 # ===== RESTAURANT PROFILE MANAGEMENT =====
 
 @restaurants_bp.route('/profile', methods=['GET'])
+@require_auth
 @require_restaurant_or_admin
 def get_restaurant_profile():
     """Get restaurant profile"""
