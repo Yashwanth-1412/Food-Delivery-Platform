@@ -1,6 +1,6 @@
-from firebase_admin import firestore
-from config.firebase import get_db
-from utils.validators import validate_user_data
+from firebase_admin import firestore, auth
+from config.firebase import get_db, get_auth
+from utils.validators import validate_user_data, validate_password
 
 class UserService:
     def __init__(self):
@@ -166,6 +166,27 @@ class UserService:
             return filtered_users
         except Exception as e:
             raise Exception(f"Error searching users: {str(e)}")
+    
+    def change_password(self, user_id, current_password, new_password):
+        try:
+            user = self.get_user_by_id(user_id)
+            if not user:
+                raise ValueError("User not found")
+  
+            user_email = user.get('email')
+            if not user_email:
+                raise ValueError("User email not found")
+            
+            auth = get_auth()
+            auth.update_user(user_id, password=new_password)
+            
+            return {
+                'success': True,
+                'message': 'Password updated successfully'
+            }
+            
+        except Exception as e:
+            raise Exception(f"Error changing password: {str(e)}")
 
 # Create a singleton instance
 user_service = UserService()

@@ -180,7 +180,7 @@ export const restaurantService = {
       formData.append('image', imageFile);
       
       const response = await restaurantApi.post(
-        `/restaurants/menu-items/${itemId}/image`, 
+        `/restaurants/menu-items/${itemId}/upload-image`, 
         formData,
         {
           headers: {

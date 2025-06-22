@@ -24,6 +24,8 @@ const MenuItemManager = ({ onClose }) => {
     allergens: '',
     image_url: ''
   });
+  const [selectedFile, setSelectedFile] = useState(null);
+  const [uploading, setUploading] = useState(false);
 
   useEffect(() => {
     loadData();
@@ -52,6 +54,42 @@ const MenuItemManager = ({ onClose }) => {
     }
   };
 
+  const handleFileChange = (e) => {
+    if (e.target.files && e.target.files[0]) {
+      setSelectedFile(e.target.files[0]);
+    }
+  };
+
+  const uploadImage = async (itemId) => {
+    if (!selectedFile) return null;
+    
+    try {
+      setUploading(true);
+      const formData = new FormData();
+      formData.append('image', selectedFile);
+      
+      const response = await fetch(`${process.env.REACT_APP_API_URL}/api/restaurants/menu/items/${itemId}/upload-image`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        },
+        body: formData
+      });
+      
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to upload image');
+      }
+      
+      return data.image_url;
+    } catch (error) {
+      console.error('Error uploading image:', error);
+      throw error;
+    } finally {
+      setUploading(false);
+    }
+  };
+
   const handleSubmit = async () => {
     if (!formData.name.trim()) {
       alert('Menu item name is required');
@@ -71,6 +109,7 @@ const MenuItemManager = ({ onClose }) => {
     try {
       setSubmitting(true);
       
+      // First create/update the menu item
       const submitData = {
         ...formData,
         price: parseFloat(formData.price),
@@ -78,10 +117,28 @@ const MenuItemManager = ({ onClose }) => {
         allergens: formData.allergens.split(',').map(a => a.trim()).filter(a => a)
       };
       
+      let itemId;
+      let response;
       if (editingItem) {
-        await restaurantService.updateMenuItem(editingItem.id, submitData);
+        response = await restaurantService.updateMenuItem(editingItem.id, submitData);
+        itemId = editingItem.id;
       } else {
-        await restaurantService.createMenuItem(submitData);
+        response = await restaurantService.createMenuItem(submitData);
+        itemId = response.data.id;
+      }
+      
+      // Then upload the image if a file was selected
+      if (selectedFile) {
+        try {
+          const imageUrl = await uploadImage(itemId);
+          if (imageUrl) {
+            // Update the menu item with the new image URL
+            await restaurantService.updateMenuItem(itemId, { image_url: imageUrl });
+          }
+        } catch (error) {
+          console.error('Image upload failed, but menu item was saved:', error);
+          // Continue even if image upload fails
+        }
       }
       
       await loadData();
@@ -89,14 +146,14 @@ const MenuItemManager = ({ onClose }) => {
       alert(editingItem ? 'Menu item updated successfully' : 'Menu item created successfully');
     } catch (error) {
       console.error('Error saving menu item:', error);
-      alert('Failed to save menu item. Please try again.');
+      alert('Failed to save menu item. ' + (error.message || 'Please try again.'));
     } finally {
       setSubmitting(false);
+      setSelectedFile(null);
     }
   };
 
   const handleEdit = (item) => {
-    setEditingItem(item);
     setFormData({
       name: item.name || '',
       description: item.description || '',
@@ -107,10 +164,13 @@ const MenuItemManager = ({ onClose }) => {
       is_vegetarian: item.is_vegetarian || false,
       is_vegan: item.is_vegan || false,
       is_spicy: item.is_spicy || false,
-      allergens: Array.isArray(item.allergens) ? item.allergens.join(', ') : '',
+      allergens: item.allergens?.join(', ') || '',
       image_url: item.image_url || ''
     });
+    setSelectedFile(null); // Reset selected file when editing
+    setEditingItem(item);
     setShowAddForm(true);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   const handleDelete = async (itemId, itemName) => {
@@ -143,7 +203,7 @@ const MenuItemManager = ({ onClose }) => {
       name: '',
       description: '',
       price: '',
-      category_id: categories.length > 0 ? categories[0].id : '',
+      category_id: categories[0]?.id || '',
       prep_time: '',
       is_available: true,
       is_vegetarian: false,
@@ -152,6 +212,7 @@ const MenuItemManager = ({ onClose }) => {
       allergens: '',
       image_url: ''
     });
+    setSelectedFile(null);
     setEditingItem(null);
     setShowAddForm(false);
   };
@@ -162,6 +223,42 @@ const MenuItemManager = ({ onClose }) => {
       ...prev,
       [name]: type === 'checkbox' ? checked : value
     }));
+  };
+
+  /*const handleFileChange = (e) => {
+    if (e.target.files && e.target.files[0]) {
+      setSelectedFile(e.target.files[0]);
+    }
+  };
+
+  const uploadImage = async (itemId) => {
+    if (!selectedFile) return null;*/
+    
+    try {
+      setUploading(true);
+      const formData = new FormData();
+      formData.append('image', selectedFile);
+      
+      const response = await fetch(`${process.env.REACT_APP_API_URL}/api/restaurants/menu/items/${itemId}/upload-image`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        },
+        body: formData
+      });
+      
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to upload image');
+      }
+      
+      return data.image_url;
+    } catch (error) {
+      console.error('Error uploading image:', error);
+      throw error;
+    } finally {
+      setUploading(false);
+    }
   };
 
   // Filter menu items
@@ -339,18 +436,63 @@ const MenuItemManager = ({ onClose }) => {
               />
             </div>
 
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Allergens (comma-separated)
-              </label>
-              <input
-                type="text"
-                name="allergens"
-                value={formData.allergens}
-                onChange={handleInputChange}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                placeholder="nuts, dairy, gluten"
-              />
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Allergens
+                </label>
+                <input
+                  type="text"
+                  name="allergens"
+                  value={formData.allergens}
+                  onChange={handleInputChange}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                  placeholder="e.g., nuts, dairy, gluten"
+                />
+                <p className="mt-1 text-xs text-gray-500">
+                  Separate multiple allergens with commas
+                </p>
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Item Image
+                </label>
+                <div className="mt-1 flex items-center">
+                  <label className="cursor-pointer bg-white py-2 px-3 border border-gray-300 rounded-md shadow-sm text-sm leading-4 font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500">
+                    Choose File
+                    <input
+                      type="file"
+                      className="sr-only"
+                      accept="image/*"
+                      onChange={handleFileChange}
+                    />
+                  </label>
+                  <span className="ml-2 text-sm text-gray-500">
+                    {selectedFile ? selectedFile.name : 'No file chosen'}
+                  </span>
+                </div>
+                {formData.image_url && !selectedFile && (
+                  <div className="mt-2">
+                    <p className="text-xs text-gray-500 mb-1">Current image:</p>
+                    <img 
+                      src={formData.image_url} 
+                      alt={formData.name}
+                      className="h-20 w-20 object-cover rounded-md"
+                    />
+                  </div>
+                )}
+                {selectedFile && (
+                  <div className="mt-2">
+                    <p className="text-xs text-gray-500 mb-1">New image preview:</p>
+                    <img 
+                      src={URL.createObjectURL(selectedFile)} 
+                      alt="Preview"
+                      className="h-20 w-20 object-cover rounded-md"
+                    />
+                  </div>
+                )}
+              </div>
             </div>
             
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">

@@ -1,6 +1,7 @@
 from flask import Blueprint, request, jsonify
 from middleware.auth import require_auth, get_current_user_id
 from services.user_service import user_service
+from utils.validators import validate_password
 
 # Create Blueprint
 users_bp = Blueprint('users', __name__, url_prefix='/api/users')
@@ -165,6 +166,51 @@ def get_user_by_email(email):
             'success': True,
             'data': user
         })
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+@users_bp.route('/change-password', methods=['POST'])
+@require_auth
+def change_password():
+
+    try:
+        data = request.get_json()
+        current_user_id = get_current_user_id()
+        
+        if not data or 'current_password' not in data or 'new_password' not in data:
+            return jsonify({
+                'success': False,
+                'error': 'current_password and new_password are required'
+            }), 400
+            
+        # Validate new password
+        password_validation = validate_password(data['new_password'])
+        if not password_validation['valid']:
+            return jsonify({
+                'success': False,
+                'error': password_validation['message']
+            }), 400
+            
+        # Change the password
+        result = user_service.change_password(
+            user_id=current_user_id,
+            current_password=data['current_password'],
+            new_password=data['new_password']
+        )
+        
+        return jsonify({
+            'success': True,
+            'message': 'Password changed successfully'
+        })
+        
+    except ValueError as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 400
     except Exception as e:
         return jsonify({
             'success': False,

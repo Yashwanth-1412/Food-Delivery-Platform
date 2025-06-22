@@ -296,7 +296,7 @@ def update_menu_item(item_id):
                 'error': 'No data provided'
             }), 400
         
-        updated_item = restaurant_service.update_menu_item(uid, item_id, data)
+        updated_item = restaurant_service.update_menu_item(item_id, data)
         
         return jsonify({
             'success': True,
@@ -460,9 +460,9 @@ def get_restaurant_analytics():
 
 # ===== IMAGE UPLOAD =====
 
-@restaurants_bp.route('/upload-image', methods=['POST'])
+@restaurants_bp.route('/menu/items/<string:item_id>/upload-image', methods=['POST'])
 @require_restaurant_or_admin
-def upload_menu_item_image():
+def upload_menu_item_image(item_id):
     """Upload menu item image"""
     try:
         uid = get_current_user_id()
@@ -474,7 +474,7 @@ def upload_menu_item_image():
             }), 400
         
         file = request.files['image']
-        image_url = restaurant_service.upload_menu_item_image(uid, file)
+        image_url = restaurant_service.upload_menu_item_image(uid, item_id, file)
         
         return jsonify({
             'success': True,

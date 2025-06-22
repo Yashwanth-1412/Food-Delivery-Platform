@@ -408,3 +408,11 @@ def validate_menu_item(data):
                 return {'valid': False, 'error': 'Each allergen must be a non-empty string'}
     
     return {'valid': True}
+
+def validate_password(password):
+    """Validate password"""
+    if len(password) < 6:
+        return {'valid': False, 'error': 'Password must be at least 6 characters long'}
+    if len(password) > 100:
+        return {'valid': False, 'error': 'Password must be less than 100 characters'}
+    return {'valid': True}

@@ -76,5 +76,31 @@ class StorageService:
         except Exception as e:
             raise Exception(f"Error getting file info: {str(e)}")
 
+    def upload_menu_item_image(self, file, uid):
+        """Upload menu item image"""
+        try:
+            # Validate file
+            validation_result = validate_image_file(file, self.allowed_extensions, self.max_file_size)
+            if not validation_result['valid']:
+                raise ValueError(validation_result['error'])
+            
+            # Get file extension
+            file_extension = file.filename.rsplit('.', 1)[1].lower()
+            
+            # Generate unique filename
+            filename = f"menu_items/{uid}/{uuid.uuid4()}.{file_extension}"
+            
+            # Upload to Firebase Storage
+            blob = self.bucket.blob(filename)
+            blob.upload_from_file(file, content_type=file.content_type)
+            
+            # Make the file publicly accessible
+            blob.make_public()
+            
+            # Return the public URL
+            return blob.public_url
+        except Exception as e:
+            raise Exception(f"Error uploading menu item image: {str(e)}")
+
 # Create a singleton instance
 storage_service = StorageService()

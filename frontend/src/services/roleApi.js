@@ -115,7 +115,22 @@ export const roleService = {
       console.error('Error updating role data:', error);
       throw error;
     }
-  }
+  },
+  
+  // Update current user's password
+  updatePassword: async (currentPassword, newPassword) => {
+    try {
+      const response = await roleApi.put('/roles/update-password', {
+        current_password: currentPassword,
+        new_password: newPassword
+      });
+      return response.data;
+    } catch (error) {
+      console.error('Error updating password:', error);
+      throw error;
+    }
+  },
+
 };
 
 export default roleService;

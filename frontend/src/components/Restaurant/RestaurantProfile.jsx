@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { restaurantService } from '../../services/restaurantApi';
+import { roleService } from '../../services/roleApi';
 
 const RestaurantProfile = ({ onClose }) => {
   const [activeTab, setActiveTab] = useState('profile');
@@ -41,6 +42,17 @@ const RestaurantProfile = ({ onClose }) => {
       sunday: { open: '09:00', close: '22:00', closed: false }
     }
   });
+
+  // Password change state
+  const [showPasswordForm, setShowPasswordForm] = useState(false);
+  const [passwordData, setPasswordData] = useState({
+    currentPassword: '',
+    newPassword: '',
+    confirmPassword: ''
+  });
+  const [passwordError, setPasswordError] = useState('');
+  const [passwordSuccess, setPasswordSuccess] = useState('');
+  const [isUpdatingPassword, setIsUpdatingPassword] = useState(false);
 
   const cuisineTypes = [
     'American', 'Asian', 'Chinese', 'Italian', 'Mexican', 'Indian', 
@@ -117,6 +129,7 @@ const RestaurantProfile = ({ onClose }) => {
       [name]: type === 'checkbox' ? checked : value
     }));
   };
+  
 
   const handleSettingsChange = (e) => {
     const { name, value, type, checked } = e.target;
@@ -137,6 +150,55 @@ const RestaurantProfile = ({ onClose }) => {
         }
       }
     }));
+  };
+
+  const handlePasswordChange = (e) => {
+    const { name, value } = e.target;
+    setPasswordData(prev => ({
+      ...prev,
+      [name]: value
+    }));
+    // Clear errors when user types
+    if (passwordError) setPasswordError('');
+    if (passwordSuccess) setPasswordSuccess('');
+  };
+
+  const handlePasswordSubmit = async (e) => {
+    e.preventDefault();
+    
+    // Validate passwords
+    if (passwordData.newPassword !== passwordData.confirmPassword) {
+      setPasswordError('New passwords do not match');
+      return;
+    }
+    
+    if (passwordData.newPassword.length < 6) {
+      setPasswordError('Password must be at least 6 characters long');
+      return;
+    }
+    
+    try {
+      setIsUpdatingPassword(true);
+      await roleService.updatePassword(
+        passwordData.currentPassword,
+        passwordData.newPassword
+      );
+      
+      setPasswordSuccess('Password updated successfully');
+      setPasswordData({
+        currentPassword: '',
+        newPassword: '',
+        confirmPassword: ''
+      });
+      
+      // Hide success message after 5 seconds
+      setTimeout(() => setPasswordSuccess(''), 5000);
+    } catch (error) {
+      console.error('Error updating password:', error);
+      setPasswordError(error.response?.data?.error || 'Failed to update password. Please try again.');
+    } finally {
+      setIsUpdatingPassword(false);
+    }
   };
 
   const TabButton = ({ id, label, isActive, onClick }) => (
@@ -507,6 +569,107 @@ const RestaurantProfile = ({ onClose }) => {
             </div>
           ))}
         </div>
+      </div>
+
+      <div className="mt-8 pt-6 border-t border-gray-200">
+        <h3 className="text-lg font-semibold text-gray-900 mb-4">Change Password</h3>
+        
+        {!showPasswordForm ? (
+          <button
+            type="button"
+            onClick={() => setShowPasswordForm(true)}
+            className="px-4 py-2 bg-blue-100 text-blue-700 rounded-md text-sm font-medium hover:bg-blue-200 transition-colors"
+          >
+            Change Password
+          </button>
+        ) : (
+          <form onSubmit={handlePasswordSubmit} className="space-y-4 max-w-md">
+            {passwordError && (
+              <div className="p-3 bg-red-50 text-red-700 text-sm rounded-md">
+                {passwordError}
+              </div>
+            )}
+            {passwordSuccess && (
+              <div className="p-3 bg-green-50 text-green-700 text-sm rounded-md">
+                {passwordSuccess}
+              </div>
+            )}
+            
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Current Password
+              </label>
+              <input
+                type="password"
+                name="currentPassword"
+                value={passwordData.currentPassword}
+                onChange={handlePasswordChange}
+                required
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                placeholder="Enter current password"
+              />
+            </div>
+            
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                New Password
+              </label>
+              <input
+                type="password"
+                name="newPassword"
+                value={passwordData.newPassword}
+                onChange={handlePasswordChange}
+                required
+                minLength="6"
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                placeholder="Enter new password"
+              />
+            </div>
+            
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Confirm New Password
+              </label>
+              <input
+                type="password"
+                name="confirmPassword"
+                value={passwordData.confirmPassword}
+                onChange={handlePasswordChange}
+                required
+                minLength="6"
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                placeholder="Confirm new password"
+              />
+            </div>
+            
+            <div className="flex space-x-3">
+              <button
+                type="submit"
+                disabled={isUpdatingPassword}
+                className="px-4 py-2 bg-blue-600 text-white rounded-md text-sm font-medium hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:bg-blue-400"
+              >
+                {isUpdatingPassword ? 'Updating...' : 'Update Password'}
+              </button>
+              
+              <button
+                type="button"
+                onClick={() => {
+                  setShowPasswordForm(false);
+                  setPasswordError('');
+                  setPasswordSuccess('');
+                  setPasswordData({
+                    currentPassword: '',
+                    newPassword: '',
+                    confirmPassword: ''
+                  });
+                }}
+                className="px-4 py-2 bg-gray-100 text-gray-700 rounded-md text-sm font-medium hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500"
+              >
+                Cancel
+              </button>
+            </div>
+          </form>
+        )}
       </div>
 
       <div className="flex justify-end">

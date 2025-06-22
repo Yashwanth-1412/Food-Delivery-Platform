@@ -427,27 +427,6 @@ class RestaurantService:
         except Exception as e:
             raise Exception(f"Error toggling menu item availability: {str(e)}")
     
-    # ===== IMAGE UPLOAD =====
-    
-    def upload_menu_item_image(self, restaurant_id: str, file) -> str:
-        """Upload menu item image"""
-        try:
-            import uuid
-            from services.storage_service import storage_service
-            
-            # Generate unique filename
-            file_extension = file.filename.rsplit('.', 1)[1].lower() if '.' in file.filename else 'jpg'
-            filename = f"menu_items/{restaurant_id}/{uuid.uuid4()}.{file_extension}"
-            
-            # Upload using storage service
-            image_url = storage_service.upload_avatar(file, f"menu_items_{restaurant_id}")
-            
-            return image_url
-        except Exception as e:
-            raise Exception(f"Error uploading menu item image: {str(e)}")
-    
-    # ===== HELPER METHODS =====
-    
     def get_menu_item_by_id(self, item_id: str) -> Optional[Dict[str, Any]]:
         """Get menu item by ID"""
         try:
@@ -475,6 +454,35 @@ class RestaurantService:
             return None
         except Exception as e:
             raise Exception(f"Error getting category: {str(e)}")
+    
+    def upload_menu_item_image(self, uid: str, item_id: str, file) -> str:
+        """Upload menu item image
+        
+        Args:
+            uid: User ID (restaurant owner)
+            item_id: Menu item ID
+            file: Image file to upload
+            
+        Returns:
+            str: Public URL of the uploaded image
+        """
+        try:
+            from services.storage_service import storage_service
+            
+            # Verify the menu item exists and belongs to the user's restaurant
+            item = self.get_menu_item_by_id(item_id)
+            if not item:
+                raise ValueError("Menu item not found")
+                
+            # Upload using storage service with the item_id in the path
+            image_url = storage_service.upload_menu_item_image(file, f"{uid}_{item_id}")
+            
+            # Update the menu item with the new image URL
+            self.update_menu_item(item_id, {'image_url': image_url})
+            
+            return image_url
+        except Exception as e:
+            raise Exception(f"Error uploading menu item image: {str(e)}")
     
     def search_menu_items(self, restaurant_id: str, search_term: str) -> List[Dict[str, Any]]:
         """Search menu items by name or description"""
