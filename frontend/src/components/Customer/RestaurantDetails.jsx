@@ -52,9 +52,7 @@ const RestaurantDetails = ({ restaurant, onBack, onAddToCart, cart }) => {
 
     // Filter by category
     if (selectedCategory !== 'all') {
-      allItems = allItems.filter(item => 
-        menu.categories.find(cat => cat.id === selectedCategory)?.items.includes(item)
-      );
+      allItems = allItems.filter(item => item.categoryId === selectedCategory);
     }
 
     // Filter by search term
