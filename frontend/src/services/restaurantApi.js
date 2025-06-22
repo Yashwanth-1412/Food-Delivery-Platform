@@ -6,9 +6,6 @@ const API_BASE_URL = 'http://localhost:5000/api';
 
 const restaurantApi = axios.create({
   baseURL: API_BASE_URL,
-  headers: {
-    'Content-Type': 'application/json',
-  },
 });
 
 // Add authentication token to requests
@@ -17,6 +14,11 @@ restaurantApi.interceptors.request.use(async (config) => {
     const token = await authService.getCurrentUserToken();
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
+    }
+    
+    // Only set Content-Type for non-FormData requests
+    if (!(config.data instanceof FormData)) {
+      config.headers['Content-Type'] = 'application/json';
     }
   } catch (error) {
     console.error('Error adding auth token:', error);
@@ -174,19 +176,16 @@ export const restaurantService = {
   },
 
   // ===== MENU ITEM IMAGE UPLOAD =====
+// ===== MENU ITEM IMAGE UPLOAD =====
   uploadMenuItemImage: async (itemId, imageFile) => {
     try {
       const formData = new FormData();
       formData.append('image', imageFile);
       
       const response = await restaurantApi.post(
-        `/restaurants/menu-items/${itemId}/upload-image`, 
-        formData,
-        {
-          headers: {
-            'Content-Type': 'multipart/form-data',
-          },
-        }
+        `/restaurants/menu/items/${itemId}/upload-image`,  // Fixed path
+        formData
+        // Remove headers - let the interceptor handle it properly
       );
       return response.data;
     } catch (error) {
@@ -194,7 +193,6 @@ export const restaurantService = {
       throw error;
     }
   },
-
   // ===== ORDERS MANAGEMENT =====
   getOrders: async (status = null, limit = 50) => {
     try {

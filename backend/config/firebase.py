@@ -1,3 +1,4 @@
+# backend/config/firebase.py
 import firebase_admin
 from firebase_admin import credentials, firestore, auth, storage
 import os
@@ -26,20 +27,68 @@ def initialize_firebase():
             # Firebase not initialized yet, initialize it
             print("🔥 Initializing Firebase for the first time...")
             cred = credentials.Certificate('firebase-config.json')
-            firebase_admin.initialize_app(cred, {
-                'storageBucket': 'food-delivery2-eafda.appspot.com'
-            })
+            
+            # Try different bucket name formats
+            bucket_names = [
+                'food-delivery2-eafda.appspot.com',
+                'food-delivery2-eafda.firebasestorage.app',
+                'food-delivery2-eafda'
+            ]
+            
+            # Start with no bucket specified - let Firebase auto-detect
+            firebase_admin.initialize_app(cred)
         
         # Initialize services
         print("🔥 Initializing Firestore client...")
         db = firestore.client()
         print(f"✅ Firestore client created: {type(db)}")
         
-        print("🔥 Initializing Storage bucket...")
-        bucket = storage.bucket()
-        print(f"✅ Storage bucket created: {type(bucket)}")
+        print("🔥 Attempting to initialize Storage bucket...")
         
-        # Test the connection
+        # Try to get the default bucket first
+        try:
+            bucket = storage.bucket()
+            print(f"✅ Got default bucket: {bucket.name}")
+        except Exception as e:
+            print(f"❌ Default bucket failed: {e}")
+            
+            # Try explicit bucket names
+            for bucket_name in [
+                'food-delivery2-eafda.appspot.com',
+                'food-delivery2-eafda.firebasestorage.app'
+            ]:
+                try:
+                    print(f"🔄 Trying bucket: {bucket_name}")
+                    bucket = storage.bucket(bucket_name)
+                    print(f"✅ Successfully connected to bucket: {bucket.name}")
+                    break
+                except Exception as bucket_error:
+                    print(f"❌ Failed with {bucket_name}: {bucket_error}")
+            else:
+                print("❌ All bucket attempts failed")
+                
+                # List available buckets for debugging
+                try:
+                    from google.cloud import storage as gcs
+                    client = gcs.Client()
+                    print("📋 Available buckets in your project:")
+                    for b in client.list_buckets():
+                        print(f"  - {b.name}")
+                except Exception as list_error:
+                    print(f"❌ Could not list buckets: {list_error}")
+                
+                return False
+        
+        # Test the bucket connection if we have one
+        if bucket:
+            try:
+                # Try to list some files to test bucket access
+                blobs = list(bucket.list_blobs(max_results=1))
+                print("✅ Storage bucket connection test successful!")
+            except Exception as storage_error:
+                print(f"⚠️  Storage bucket access test failed: {storage_error}")
+        
+        # Test Firestore connection
         print("🧪 Testing Firestore connection...")
         test_collection = db.collection('_test')
         print("✅ Firestore connection successful!")

@@ -1,5 +1,5 @@
 # backend/app.py - Add agent routes
-from flask import Flask, jsonify
+from flask import Flask, jsonify,send_from_directory
 from flask_cors import CORS
 from dotenv import load_dotenv
 import os
@@ -42,6 +42,12 @@ def create_app():
     app.register_blueprint(agent_bp)  # Register agent routes
     
     # Basic routes
+    @app.route('/static/uploads/<path:filename>')
+    def uploaded_file(filename):
+        """Serve uploaded image files"""
+        upload_dir = os.path.join(os.getcwd(), 'static', 'uploads')
+        return send_from_directory(upload_dir, filename)        
+        
     @app.route('/')
     def home():
         return jsonify({

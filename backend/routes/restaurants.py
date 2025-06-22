@@ -491,6 +491,8 @@ def upload_menu_item_image(item_id):
             'success': False,
             'error': str(e)
         }), 500
+
+
 @restaurants_bp.route('/menu/summary', methods=['GET'])
 @require_restaurant_or_admin
 def get_menu_summary():

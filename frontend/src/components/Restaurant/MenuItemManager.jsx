@@ -25,7 +25,6 @@ const MenuItemManager = ({ onClose }) => {
     image_url: ''
   });
   const [selectedFile, setSelectedFile] = useState(null);
-  const [uploading, setUploading] = useState(false);
 
   useEffect(() => {
     loadData();
@@ -57,36 +56,6 @@ const MenuItemManager = ({ onClose }) => {
   const handleFileChange = (e) => {
     if (e.target.files && e.target.files[0]) {
       setSelectedFile(e.target.files[0]);
-    }
-  };
-
-  const uploadImage = async (itemId) => {
-    if (!selectedFile) return null;
-    
-    try {
-      setUploading(true);
-      const formData = new FormData();
-      formData.append('image', selectedFile);
-      
-      const response = await fetch(`${process.env.REACT_APP_API_URL}/api/restaurants/menu/items/${itemId}/upload-image`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        },
-        body: formData
-      });
-      
-      const data = await response.json();
-      if (!response.ok) {
-        throw new Error(data.error || 'Failed to upload image');
-      }
-      
-      return data.image_url;
-    } catch (error) {
-      console.error('Error uploading image:', error);
-      throw error;
-    } finally {
-      setUploading(false);
     }
   };
 
@@ -130,14 +99,14 @@ const MenuItemManager = ({ onClose }) => {
       // Then upload the image if a file was selected
       if (selectedFile) {
         try {
-          const imageUrl = await uploadImage(itemId);
-          if (imageUrl) {
+          const imageResponse = await restaurantService.uploadMenuItemImage(itemId, selectedFile);
+          if (imageResponse.success && imageResponse.image_url) {
             // Update the menu item with the new image URL
-            await restaurantService.updateMenuItem(itemId, { image_url: imageUrl });
+            await restaurantService.updateMenuItem(itemId, { image_url: imageResponse.image_url });
           }
         } catch (error) {
           console.error('Image upload failed, but menu item was saved:', error);
-          // Continue even if image upload fails
+          alert('Menu item saved but image upload failed. You can edit the item to upload an image later.');
         }
       }
       
@@ -223,42 +192,6 @@ const MenuItemManager = ({ onClose }) => {
       ...prev,
       [name]: type === 'checkbox' ? checked : value
     }));
-  };
-
-  /*const handleFileChange = (e) => {
-    if (e.target.files && e.target.files[0]) {
-      setSelectedFile(e.target.files[0]);
-    }
-  };
-
-  const uploadImage = async (itemId) => {
-    if (!selectedFile) return null;*/
-    
-    try {
-      setUploading(true);
-      const formData = new FormData();
-      formData.append('image', selectedFile);
-      
-      const response = await fetch(`${process.env.REACT_APP_API_URL}/api/restaurants/menu/items/${itemId}/upload-image`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        },
-        body: formData
-      });
-      
-      const data = await response.json();
-      if (!response.ok) {
-        throw new Error(data.error || 'Failed to upload image');
-      }
-      
-      return data.image_url;
-    } catch (error) {
-      console.error('Error uploading image:', error);
-      throw error;
-    } finally {
-      setUploading(false);
-    }
   };
 
   // Filter menu items
@@ -597,6 +530,17 @@ const MenuItemManager = ({ onClose }) => {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {filteredItems.map((item) => (
             <div key={item.id} className="bg-white border border-gray-200 rounded-lg overflow-hidden hover:shadow-md transition-shadow">
+              {/* Item Image */}
+              {item.image_url && (
+                <div className="h-48 w-full overflow-hidden">
+                  <img 
+                    src={item.image_url} 
+                    alt={item.name}
+                    className="h-full w-full object-cover hover:scale-105 transition-transform duration-200"
+                  />
+                </div>
+              )}
+              
               <div className="p-4">
                 <div className="flex justify-between items-start mb-2">
                   <h3 className="text-lg font-semibold text-gray-900 truncate">{item.name}</h3>

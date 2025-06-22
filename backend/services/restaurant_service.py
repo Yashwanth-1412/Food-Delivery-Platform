@@ -474,8 +474,8 @@ class RestaurantService:
             if not item:
                 raise ValueError("Menu item not found")
                 
-            # Upload using storage service with the item_id in the path
-            image_url = storage_service.upload_menu_item_image(file, f"{uid}_{item_id}")
+            # Upload using local storage service - pass item_id (not uid)
+            image_url = storage_service.upload_menu_item_image(file, item_id)
             
             # Update the menu item with the new image URL
             self.update_menu_item(item_id, {'image_url': image_url})
