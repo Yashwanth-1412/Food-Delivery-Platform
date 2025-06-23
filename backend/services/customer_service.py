@@ -124,50 +124,75 @@ class CustomerService:
 
     # ===== ORDER MANAGEMENT =====
     
-    def create_order(self, customer_id: str, order_data: Dict[str, Any]) -> Dict[str, Any]:
-        """Create a new order"""
+    def create_order(self, customer_id, order_data):
+            """Create order with cf_link_id"""
+            try:
+                order_id = f"order_{uuid.uuid4().hex[:12]}"
+                order_number = f"ORD{datetime.now().strftime('%Y%m%d')}{uuid.uuid4().hex[:6].upper()}"
+                
+                order_doc = {
+                    'id': order_id,
+                    'order_number': order_number,
+                    'customer_id': customer_id,
+                    'restaurant_id': order_data['restaurant_id'],
+                    'items': order_data['items'],
+                    'delivery_address': order_data['delivery_address'],
+                    'special_instructions': order_data.get('special_instructions', ''),
+                    'payment_method': order_data.get('payment_method', 'online'),
+                    'subtotal': order_data['subtotal'],
+                    'delivery_fee': order_data['delivery_fee'],
+                    'tax': order_data['tax'],
+                    'total': order_data['total'],
+                    'cf_link_id': order_data.get('cf_link_id'),  # Store the Cashfree link ID
+                    'order_status': 'CONFIRMED' if order_data.get('payment_method') == 'cash' else 'CONFIRMED',
+                    'payment_status': 'PAID' if order_data.get('payment_method') == 'cash' else 'PAID',
+                    'created_at': datetime.utcnow(),
+                    'updated_at': datetime.utcnow()
+                }
+                
+                # Store order in database
+                self.db.collection('orders').document(order_id).set(order_doc)
+                
+                return {
+                    'success': True,
+                    'data': order_doc
+                }
+                
+            except Exception as e:
+                print(f"Error creating order: {e}")
+                return {
+                    'success': False,
+                    'error': str(e)
+                }
+    
+    def _get_delivery_address_details(self, address_id: str) -> Dict[str, Any]:
+        """Get delivery address details"""
         try:
-            # Validate restaurant exists and is open
-            restaurant = self.get_restaurant_details(order_data['restaurant_id'])
-            if not restaurant.get('is_open', False):
-                raise ValueError("Restaurant is currently closed")
+            doc_ref = self.db.collection(self.addresses_collection).document(address_id)
+            doc = doc_ref.get()
             
-            # Validate minimum order amount
-            min_order = restaurant.get('min_order', 0)
-            subtotal = order_data.get('subtotal', 0)
-            if subtotal < min_order:
-                raise ValueError(f"Minimum order amount is ${min_order}")
+            if not doc.exists:
+                raise ValueError("Delivery address not found")
             
-            # Generate order number
-            order_number = f"ORD-{int(datetime.now().timestamp())}"
+            address_data = doc.to_dict()
             
-            # Create order document
-            order_doc = {
-                'order_number': order_number,
-                'customer_id': customer_id,
-                'restaurant_id': order_data['restaurant_id'],
-                'restaurant_name': restaurant.get('name', ''),
-                'items': order_data['items'],
-                'subtotal': order_data.get('subtotal', 0),
-                'delivery_fee': order_data.get('delivery_fee', 0),
-                'tax': order_data.get('tax', 0),
-                'total': order_data['total'],
-                'status': 'pending',
-                'delivery_address': order_data['delivery_address'],
-                'special_instructions': order_data.get('special_instructions', ''),
-                'payment_method': order_data.get('payment_method', 'cash'),
-                'created_at': datetime.utcnow(),
-                'updated_at': datetime.utcnow()
+            # Format the address for display
+            formatted_address = f"{address_data.get('address_line_1', '')}"
+            if address_data.get('address_line_2'):
+                formatted_address += f", {address_data['address_line_2']}"
+            formatted_address += f", {address_data.get('city', '')}, {address_data.get('state', '')} {address_data.get('zip_code', '')}"
+            
+            return {
+                'formatted_address': formatted_address,
+                'receiver_name': address_data.get('receiver_name'),
+                'receiver_phone': address_data.get('receiver_phone', '')
             }
-            
-            # Save to database
-            doc_ref = self.db.collection(self.orders_collection).add(order_doc)
-            order_id = doc_ref[1].id
-            
-            order_doc['id'] = order_id
-            return order_doc
         except Exception as e:
-            raise Exception(f"Error creating order: {str(e)}")
+            raise Exception(f"Error getting delivery address details: {str(e)}")
+
+
+
+
     
     def get_customer_orders(self, customer_id: str, status: str = None, limit: int = 20) -> List[Dict[str, Any]]:
         """Get customer's order history"""

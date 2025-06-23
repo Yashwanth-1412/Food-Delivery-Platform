@@ -1,9 +1,12 @@
+// frontend/src/App.jsx - Updated with payment success route
 import React, { useState, useEffect } from 'react';
 import { authService } from './firebase/auth';
 import { roleService } from './services/roleApi';
 import Login from './components/Auth/Login';
 import LoadingScreen from './components/common/LoadingScreen';
 import RoleBasedRouter from './components/Router/RoleBasedRouter';
+import PaymentSuccess from './components/Payment/PaymentSuccess';
+import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 
 function App() {
   const [user, setUser] = useState(null);
@@ -126,6 +129,61 @@ function App() {
     window.location.reload();
   };
 
+  // Main App component with routing
+  return (
+    <Router>
+      <Routes>
+        {/* Payment Success Route - Available to all authenticated users */}
+        <Route 
+          path="/payment/success" 
+          element={
+            user ? (
+              <PaymentSuccess user={user} onLogout={handleLogout} />
+            ) : (
+              <div className="min-h-screen flex items-center justify-center">
+                <div className="text-center">
+                  <h1 className="text-2xl font-bold text-gray-900 mb-4">Payment Status</h1>
+                  <p className="text-gray-600 mb-4">Please sign in to view your payment status</p>
+                  <button 
+                    onClick={() => window.location.href = '/'}
+                    className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg"
+                  >
+                    Go to Login
+                  </button>
+                </div>
+              </div>
+            )
+          } 
+        />
+        
+        {/* Main App Route */}
+        <Route 
+          path="/*" 
+          element={<MainApp 
+            user={user}
+            userRole={userRole}
+            loading={loading}
+            error={error}
+            onLoginWithRole={handleLoginWithRole}
+            onLogout={handleLogout}
+            onRetry={handleRetry}
+          />} 
+        />
+      </Routes>
+    </Router>
+  );
+}
+
+// Separate component for main app logic
+const MainApp = ({ 
+  user, 
+  userRole, 
+  loading, 
+  error, 
+  onLoginWithRole, 
+  onLogout, 
+  onRetry 
+}) => {
   // Handle loading state
   if (loading) {
     return (
@@ -151,13 +209,13 @@ function App() {
           <p className="text-gray-600 mb-6">{error}</p>
           <div className="space-y-3">
             <button 
-              onClick={handleRetry}
+              onClick={onRetry}
               className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold px-6 py-3 rounded-lg transition-colors"
             >
               Try Again
             </button>
             <button 
-              onClick={handleLogout}
+              onClick={onLogout}
               className="w-full bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium px-6 py-3 rounded-lg transition-colors"
             >
               Sign Out
@@ -170,7 +228,7 @@ function App() {
 
   // Handle unauthenticated state
   if (!user) {
-    return <Login onLoginSuccess={handleLoginWithRole} />;
+    return <Login onLoginSuccess={onLoginWithRole} />;
   }
 
   // Handle authenticated user with role-based routing
@@ -178,10 +236,10 @@ function App() {
     <RoleBasedRouter 
       user={user} 
       userRole={userRole}
-      onLogout={handleLogout}
+      onLogout={onLogout}
       error={error}
     />
   );
-}
+};
 
 export default App;

@@ -1,4 +1,5 @@
-// frontend/src/components/Agent/ActiveDeliveries.jsx
+// frontend/src/components/Agent/ActiveDeliveries.jsx - Simple navigation without Google Maps API
+
 import React, { useState } from 'react';
 import { agentService } from '../../services/agentApi';
 
@@ -9,17 +10,7 @@ const ActiveDeliveries = ({ orders, onStatusUpdate }) => {
     try {
       setUpdating(orderId);
       
-      // Get location if updating to certain statuses
-      let location = null;
-      if (newStatus === 'picked_up' || newStatus === 'on_way' || newStatus === 'delivered') {
-        try {
-          location = await agentService.getCurrentLocation();
-        } catch (error) {
-          console.warn('Could not get location:', error);
-        }
-      }
-      
-      const response = await agentService.updateDeliveryStatus(orderId, newStatus, location);
+      const response = await agentService.updateDeliveryStatus(orderId, newStatus);
       
       if (response.success) {
         onStatusUpdate();
@@ -36,70 +27,124 @@ const ActiveDeliveries = ({ orders, onStatusUpdate }) => {
     }
   };
 
-  const getStatusColor = (status) => {
-    switch (status) {
-      case 'assigned_to_agent': return 'bg-blue-100 text-blue-800';
-      case 'picked_up': return 'bg-yellow-100 text-yellow-800';
-      case 'on_way': return 'bg-purple-100 text-purple-800';
-      case 'delivered': return 'bg-green-100 text-green-800';
-      default: return 'bg-gray-100 text-gray-800';
+  const handleNavigate = (order) => {
+    const address = order.delivery_address;
+    
+    if (address) {
+      // Simple navigation - opens Google Maps in browser (no API key needed)
+      const encodedAddress = encodeURIComponent(address);
+      
+      // Detect device type for better UX
+      const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+      const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+      
+      if (isIOS) {
+        // Try Apple Maps first on iOS devices
+        const appleUrl = `http://maps.apple.com/?daddr=${encodedAddress}`;
+        window.open(appleUrl, '_blank');
+      } else if (isMobile) {
+        // Use Google Maps app URL for mobile
+        const googleUrl = `https://maps.google.com/maps?daddr=${encodedAddress}`;
+        window.open(googleUrl, '_blank');
+      } else {
+        // Use Google Maps web for desktop
+        const webUrl = `https://www.google.com/maps/dir/?api=1&destination=${encodedAddress}`;
+        window.open(webUrl, '_blank');
+      }
+    } else {
+      alert('Delivery address not available');
     }
+  };
+
+  const handleCallCustomer = (order) => {
+    const phone = order.customer?.phone || order.receiver_phone;
+    
+    if (phone) {
+      // Create tel: link to call customer
+      window.location.href = `tel:${phone}`;
+    } else {
+      alert('Customer phone number not available');
+    }
+  };
+
+  const getStatusColor = (status) => {
+    const colors = {
+      'assigned_to_agent': 'bg-blue-100 text-blue-800',
+      'picked_up': 'bg-yellow-100 text-yellow-800',
+      'on_way': 'bg-purple-100 text-purple-800',
+      'delivered': 'bg-green-100 text-green-800'
+    };
+    return colors[status] || 'bg-gray-100 text-gray-800';
   };
 
   const getNextAction = (status) => {
-    switch (status) {
-      case 'assigned_to_agent':
-        return { action: 'picked_up', label: '📦 Mark as Picked Up', color: 'bg-yellow-600 hover:bg-yellow-700' };
-      case 'picked_up':
-        return { action: 'on_way', label: '🚚 Mark as On Way', color: 'bg-purple-600 hover:bg-purple-700' };
-      case 'on_way':
-        return { action: 'delivered', label: '✅ Mark as Delivered', color: 'bg-green-600 hover:bg-green-700' };
-      default:
-        return null;
+    const actions = {
+      'assigned_to_agent': {
+        status: 'picked_up',
+        label: '📦 Mark as Picked Up',
+        color: 'bg-yellow-600 hover:bg-yellow-700'
+      },
+      'picked_up': {
+        status: 'on_way',
+        label: '🚗 Mark as On the Way',
+        color: 'bg-purple-600 hover:bg-purple-700'
+      },
+      'on_way': {
+        status: 'delivered',
+        label: '✅ Mark as Delivered',
+        color: 'bg-green-600 hover:bg-green-700'
+      }
+    };
+    return actions[status];
+  };
+
+  const formatTime = (timestamp) => {
+    try {
+      const date = new Date(timestamp);
+      return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    } catch {
+      return 'Unknown';
     }
   };
 
-  const formatTime = (timeString) => {
-    if (!timeString) return '';
-    const time = new Date(timeString);
-    return time.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  const getTimeElapsed = (timestamp) => {
+    try {
+      const now = new Date();
+      const then = new Date(timestamp);
+      const diffMs = now - then;
+      const diffMins = Math.floor(diffMs / (1000 * 60));
+      
+      if (diffMins < 60) {
+        return `${diffMins}m`;
+      } else {
+        const diffHours = Math.floor(diffMins / 60);
+        const remainingMins = diffMins % 60;
+        return `${diffHours}h ${remainingMins}m`;
+      }
+    } catch {
+      return '0m';
+    }
   };
 
-  const getTimeElapsed = (startTime) => {
-    if (!startTime) return '';
-    const start = new Date(startTime);
-    const now = new Date();
-    const diffMinutes = Math.floor((now - start) / (1000 * 60));
-    
-    if (diffMinutes < 60) return `${diffMinutes}m`;
-    const hours = Math.floor(diffMinutes / 60);
-    const minutes = diffMinutes % 60;
-    return `${hours}h ${minutes}m`;
-  };
-
-  if (orders.length === 0) {
+  if (!orders || orders.length === 0) {
     return (
-      <div className="bg-white rounded-lg shadow-sm p-12 text-center">
-        <div className="text-6xl mb-4">🚚</div>
-        <h3 className="text-lg font-semibold text-gray-900 mb-2">No Active Deliveries</h3>
-        <p className="text-gray-500">
-          Accept an order from the Available Orders tab to start delivering
-        </p>
+      <div className="bg-white rounded-lg shadow-sm border p-8 text-center">
+        <div className="text-6xl mb-4">🚗</div>
+        <h3 className="text-lg font-medium text-gray-900 mb-2">No Active Deliveries</h3>
+        <p className="text-gray-500">You don't have any active deliveries at the moment.</p>
       </div>
     );
   }
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="bg-white rounded-lg shadow-sm p-6">
-        <h2 className="text-2xl font-bold text-gray-900">Active Deliveries</h2>
-        <p className="text-gray-600 mt-1">
+      <div className="flex items-center justify-between">
+        <h2 className="text-xl font-semibold text-gray-900">Active Deliveries</h2>
+        <p className="text-sm text-gray-500">
           {orders.length} active {orders.length === 1 ? 'delivery' : 'deliveries'}
         </p>
       </div>
 
-      {/* Active Orders */}
       <div className="space-y-4">
         {orders.map((order) => {
           const nextAction = getNextAction(order.status);
@@ -130,51 +175,9 @@ const ActiveDeliveries = ({ orders, onStatusUpdate }) => {
                   
                   <div className="text-right">
                     <div className="text-xl font-bold text-green-600">
-                      ${order.delivery_fee?.toFixed(2) || '4.50'}
+                      ${order.delivery_fee?.toFixed(2) || '3.00'}
                     </div>
                     <p className="text-sm text-gray-500">Delivery Fee</p>
-                  </div>
-                </div>
-
-                {/* Timeline */}
-                <div className="mb-4 p-4 bg-gray-50 rounded-lg">
-                  <h4 className="font-medium text-gray-900 mb-3">Delivery Progress</h4>
-                  <div className="space-y-2">
-                    <div className="flex items-center text-sm">
-                      <div className={`w-3 h-3 rounded-full mr-3 ${
-                        order.assigned_at ? 'bg-blue-500' : 'bg-gray-300'
-                      }`}></div>
-                      <span className={order.assigned_at ? 'text-gray-900' : 'text-gray-500'}>
-                        Order Assigned {order.assigned_at && `- ${formatTime(order.assigned_at)}`}
-                      </span>
-                    </div>
-                    
-                    <div className="flex items-center text-sm">
-                      <div className={`w-3 h-3 rounded-full mr-3 ${
-                        order.picked_up_at ? 'bg-yellow-500' : 'bg-gray-300'
-                      }`}></div>
-                      <span className={order.picked_up_at ? 'text-gray-900' : 'text-gray-500'}>
-                        Picked Up {order.picked_up_at && `- ${formatTime(order.picked_up_at)}`}
-                      </span>
-                    </div>
-                    
-                    <div className="flex items-center text-sm">
-                      <div className={`w-3 h-3 rounded-full mr-3 ${
-                        order.on_way_at ? 'bg-purple-500' : 'bg-gray-300'
-                      }`}></div>
-                      <span className={order.on_way_at ? 'text-gray-900' : 'text-gray-500'}>
-                        On the Way {order.on_way_at && `- ${formatTime(order.on_way_at)}`}
-                      </span>
-                    </div>
-                    
-                    <div className="flex items-center text-sm">
-                      <div className={`w-3 h-3 rounded-full mr-3 ${
-                        order.delivered_at ? 'bg-green-500' : 'bg-gray-300'
-                      }`}></div>
-                      <span className={order.delivered_at ? 'text-gray-900' : 'text-gray-500'}>
-                        Delivered {order.delivered_at && `- ${formatTime(order.delivered_at)}`}
-                      </span>
-                    </div>
                   </div>
                 </div>
 
@@ -184,15 +187,15 @@ const ActiveDeliveries = ({ orders, onStatusUpdate }) => {
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
                       <p className="text-sm text-gray-700">
-                        <strong>Name:</strong> {order.customer?.name || order.customer_name || 'Customer'}
+                        <strong>Name:</strong> {order.customer?.name || order.receiver_name || 'Customer'}
                       </p>
                       <p className="text-sm text-gray-700">
-                        <strong>Phone:</strong> {order.customer?.phone || '(555) 123-4567'}
+                        <strong>Phone:</strong> {order.customer?.phone || order.receiver_phone || 'Not provided'}
                       </p>
                     </div>
                     <div>
                       <p className="text-sm text-gray-700">
-                        <strong>Address:</strong> {order.delivery_address}
+                        <strong>Address:</strong> {order.delivery_address || 'Address not available'}
                       </p>
                       {order.special_instructions && (
                         <p className="text-sm text-gray-700 mt-2">
@@ -203,21 +206,19 @@ const ActiveDeliveries = ({ orders, onStatusUpdate }) => {
                   </div>
                 </div>
 
-                {/* Order Summary */}
+                {/* Order Items */}
                 <div className="mb-4 p-4 bg-gray-50 rounded-lg">
-                  <h4 className="font-medium text-gray-900 mb-2">Order Summary</h4>
+                  <h4 className="font-medium text-gray-900 mb-2">Order Items</h4>
                   <div className="space-y-1">
                     {order.items?.map((item, index) => (
                       <div key={index} className="flex justify-between text-sm">
                         <span>{item.quantity}x {item.name}</span>
                         <span>${(item.price * item.quantity).toFixed(2)}</span>
                       </div>
-                    )) || (
-                      <div className="text-sm text-gray-500">Order items not available</div>
-                    )}
+                    )) || <p className="text-sm text-gray-500">Items not available</p>}
                   </div>
                   <div className="border-t pt-2 mt-2">
-                    <div className="flex justify-between text-sm font-medium">
+                    <div className="flex justify-between font-medium">
                       <span>Total:</span>
                       <span>${order.total?.toFixed(2) || '0.00'}</span>
                     </div>
@@ -225,37 +226,12 @@ const ActiveDeliveries = ({ orders, onStatusUpdate }) => {
                 </div>
 
                 {/* Action Buttons */}
-                <div className="flex space-x-3">
-                  {/* Contact Customer */}
-                  <button
-                    onClick={() => {
-                      const phone = order.customer?.phone || '5551234567';
-                      window.open(`tel:${phone}`, '_self');
-                    }}
-                    className="flex-1 py-2 px-4 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors text-sm font-medium"
-                  >
-                    📞 Call Customer
-                  </button>
-
-                  {/* Contact Restaurant */}
-                  {order.status === 'assigned_to_agent' && (
-                    <button
-                      onClick={() => {
-                        const phone = order.restaurant?.phone || '5551234567';
-                        window.open(`tel:${phone}`, '_self');
-                      }}
-                      className="flex-1 py-2 px-4 bg-gray-600 hover:bg-gray-700 text-white rounded-lg transition-colors text-sm font-medium"
-                    >
-                      📞 Call Restaurant
-                    </button>
-                  )}
-
-                  {/* Next Action Button */}
+                <div className="space-y-3">
                   {nextAction && (
                     <button
-                      onClick={() => handleStatusUpdate(order.id, nextAction.action)}
+                      onClick={() => handleStatusUpdate(order.id, nextAction.status)}
                       disabled={updating === order.id}
-                      className={`flex-1 py-2 px-4 text-white rounded-lg transition-colors text-sm font-medium ${
+                      className={`w-full py-3 px-4 rounded-lg text-white font-medium transition-colors ${
                         updating === order.id
                           ? 'bg-gray-400 cursor-not-allowed'
                           : nextAction.color
@@ -271,19 +247,21 @@ const ActiveDeliveries = ({ orders, onStatusUpdate }) => {
                       )}
                     </button>
                   )}
-                </div>
 
-                {/* Navigation Button */}
-                <div className="mt-3">
-                  <button
-                    onClick={() => {
-                      const address = encodeURIComponent(order.delivery_address);
-                      window.open(`https://www.google.com/maps/dir/?api=1&destination=${address}`, '_blank');
-                    }}
-                    className="w-full py-2 px-4 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors text-sm font-medium"
-                  >
-                    🗺️ Navigate to Customer
-                  </button>
+                  <div className="grid grid-cols-2 gap-3">
+                    <button
+                      onClick={() => handleCallCustomer(order)}
+                      className="py-2 px-4 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors text-sm font-medium"
+                    >
+                      📞 Call Customer
+                    </button>
+                    <button
+                      onClick={() => handleNavigate(order)}
+                      className="py-2 px-4 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors text-sm font-medium"
+                    >
+                      🗺️ Navigate
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>

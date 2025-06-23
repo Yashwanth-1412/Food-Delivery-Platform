@@ -24,6 +24,7 @@ from routes.roles import roles_bp
 from routes.restaurants import restaurants_bp
 from routes.customer import customer_bp
 from routes.agent import agent_bp  # Add agent routes
+from routes.payment import payment_bp
 
 def create_app():
     """Application factory pattern"""
@@ -40,6 +41,7 @@ def create_app():
     app.register_blueprint(restaurants_bp)
     app.register_blueprint(customer_bp)
     app.register_blueprint(agent_bp)  # Register agent routes
+    app.register_blueprint(payment_bp)
     
     # Basic routes
     @app.route('/static/uploads/<path:filename>')

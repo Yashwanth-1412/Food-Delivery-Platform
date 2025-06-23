@@ -278,40 +278,38 @@ def get_restaurant_menu(restaurant_id):
 
 # ===== ORDER MANAGEMENT =====
 
+
 @customer_bp.route('/orders', methods=['POST'])
 @require_role(UserRole.CUSTOMER, UserRole.ADMIN)
 def create_order():
     """Create a new order"""
     try:
-        uid = get_current_user_id()
-        order_data = request.get_json()
+        data = request.get_json()
+        current_user = auth.get_user(request.user_id)
         
-        # Validate required fields
-        required_fields = ['restaurant_id', 'items', 'delivery_address', 'total']
-        for field in required_fields:
-            if field not in order_data:
-                return jsonify({
-                    'success': False,
-                    'error': f'Missing required field: {field}'
-                }), 400
+        # Create order
+        result = customer_service.create_order(
+            customer_id=current_user.uid,
+            order_data=data
+        )
         
-        # Create the order
-        order = customer_service.create_order(uid, order_data)
-        
-        return jsonify({
-            'success': True,
-            'message': 'Order created successfully',
-            'data': order
-        })
-    except ValueError as e:
-        return jsonify({
-            'success': False,
-            'error': str(e)
-        }), 400
+        if result['success']:
+            return jsonify({
+                'success': True,
+                'data': result['data'],
+                'message': 'Order created successfully'
+            })
+        else:
+            return jsonify({
+                'success': False,
+                'error': result['error']
+            }), 400
+            
     except Exception as e:
+        print(f"Error in create_order: {e}")
         return jsonify({
             'success': False,
-            'error': str(e)
+            'error': 'Internal server error'
         }), 500
 
 @customer_bp.route('/orders', methods=['GET'])

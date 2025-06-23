@@ -1,16 +1,22 @@
-// frontend/src/components/Customer/CartManager.jsx
+// frontend/src/components/Customer/CartManager.jsx - Updated with Payment Links
 import React, { useState, useEffect } from 'react';
 import { customerService } from '../../services/customerApi';
+import { paymentAPI } from '../../services/paymentApi';
 
-const CartManager = ({ cart, restaurant, onUpdateItem, onRemoveItem, onClearCart, /*total, isModal = false*/ }) => {
+const CartManager = ({ cart, restaurant, onUpdateItem, onRemoveItem, onClearCart }) => {
   const [isCheckingOut, setIsCheckingOut] = useState(false);
   const [showCheckoutForm, setShowCheckoutForm] = useState(false);
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [addresses, setAddresses] = useState([]);
   const [selectedAddress, setSelectedAddress] = useState('');
   const [showAddAddress, setShowAddAddress] = useState(false);
   const [addressLoading, setAddressLoading] = useState(false);
   const [specialInstructions, setSpecialInstructions] = useState('');
-  const [paymentMethod, setPaymentMethod] = useState('cash');
+  const [paymentMethod, setPaymentMethod] = useState('upi');
+  const [paymentLink, setPaymentLink] = useState(null);
+  const [paymentLoading, setPaymentLoading] = useState(false);
+  const [checkingPayment, setCheckingPayment] = useState(false);
+  const [orderData, setOrderData] = useState(null);
   const [newAddress, setNewAddress] = useState({
     label: '',
     receiver_name: '',
@@ -36,7 +42,6 @@ const CartManager = ({ cart, restaurant, onUpdateItem, onRemoveItem, onClearCart
       const response = await customerService.getDeliveryAddresses();
       if (response.success) {
         setAddresses(response.data);
-        // Auto-select default address
         const defaultAddress = response.data.find(addr => addr.is_default);
         if (defaultAddress) {
           setSelectedAddress(defaultAddress.id);
@@ -97,11 +102,19 @@ const CartManager = ({ cart, restaurant, onUpdateItem, onRemoveItem, onClearCart
   };
 
   const calculateTax = () => {
-    return calculateSubtotal() * 0.08; // 8% tax
+    return calculateSubtotal() * 0.18; // 18% GST for India
   };
 
   const calculateTotal = () => {
     return calculateSubtotal() + calculateDeliveryFee() + calculateTax();
+  };
+
+  const getCustomerPhone = () => {
+    if (selectedAddress && addresses) {
+      const address = addresses.find(addr => addr.id === selectedAddress);
+      return address?.receiver_phone || '9999999999';
+    }
+    return '9999999999';
   };
 
   const handleCheckout = async () => {
@@ -111,14 +124,15 @@ const CartManager = ({ cart, restaurant, onUpdateItem, onRemoveItem, onClearCart
     }
 
     if (calculateSubtotal() < (restaurant?.min_order || 0)) {
-      alert(`Minimum order amount is $${restaurant?.min_order?.toFixed(2) || '0.00'}`);
+      alert(`Minimum order amount is ₹${restaurant?.min_order?.toFixed(2) || '0.00'}`);
       return;
     }
 
     setIsCheckingOut(true);
     
     try {
-      const orderData = {
+      // Store order data for later creation
+      const orderRequestData = {
         restaurant_id: restaurant.id,
         items: cart.map(item => ({
           menu_item_id: item.id,
@@ -126,7 +140,7 @@ const CartManager = ({ cart, restaurant, onUpdateItem, onRemoveItem, onClearCart
           price: item.price,
           quantity: item.quantity
         })),
-        delivery_address_id: selectedAddress,
+        delivery_address: selectedAddress,
         special_instructions: specialInstructions,
         payment_method: paymentMethod,
         subtotal: calculateSubtotal(),
@@ -135,30 +149,148 @@ const CartManager = ({ cart, restaurant, onUpdateItem, onRemoveItem, onClearCart
         total: calculateTotal()
       };
 
-      // Try to create order
-      try {
-        const response = await customerService.createOrder(orderData);
+      // For cash on delivery, create order immediately
+      if (paymentMethod === 'cash') {
+        const response = await customerService.createOrder({
+          ...orderRequestData,
+          cf_link_id: null  // No payment link for COD
+        });
+        
         if (response.success) {
-          alert('Order placed successfully! 🎉');
+          alert('Order placed successfully! 🎉 You can pay cash on delivery.');
           onClearCart();
           setShowCheckoutForm(false);
           setSpecialInstructions('');
         } else {
           throw new Error(response.error || 'Failed to place order');
         }
-      } catch (error) {
-        console.error('Order creation failed, simulating success:', error);
-        // Simulate successful order for demo
-        alert('Order placed successfully! 🎉 (Demo mode - order not actually processed)');
-        onClearCart();
-        setShowCheckoutForm(false);
-        setSpecialInstructions('');
+        return;
       }
+
+      // For online payment, store order data and show payment modal
+      setOrderData(orderRequestData);
+      setShowCheckoutForm(false);
+      setShowPaymentModal(true);
+
     } catch (error) {
-      console.error('Error placing order:', error);
-      alert('Failed to place order. Please try again.');
+      console.error('Checkout failed:', error);
+      alert('Failed to process checkout. Please try again.');
     } finally {
       setIsCheckingOut(false);
+    }
+  };
+
+  const createPaymentLink = async () => {
+    if (!orderData) return;
+
+    setPaymentLoading(true);
+    
+    try {
+      const response = await paymentAPI.createPaymentLink(
+        orderData.total,
+        getCustomerPhone(),
+        {
+          restaurant_name: restaurant?.name,
+          restaurant_id: restaurant?.id
+        }
+      );
+
+      if (response.success) {
+        setPaymentLink(response);
+      } else {
+        alert('Failed to create payment link: ' + response.error);
+      }
+    } catch (error) {
+      console.error('Error creating payment link:', error);
+      alert('Failed to create payment link. Please try again.');
+    } finally {
+      setPaymentLoading(false);
+    }
+  };
+
+  const handleOpenPaymentLink = () => {
+    if (paymentLink?.link_url) {
+      // Open payment link in new tab
+      window.open(paymentLink.link_url, '_blank');
+      
+      // Start checking payment status
+      startPaymentStatusCheck();
+    }
+  };
+
+  const startPaymentStatusCheck = () => {
+    setCheckingPayment(true);
+    
+    const checkInterval = setInterval(async () => {
+      try {
+        const statusResponse = await paymentAPI.checkLinkStatus(paymentLink.cf_link_id);
+        
+        if (statusResponse.success) {
+          const { link_amount_paid, payments } = statusResponse;
+          
+          if (link_amount_paid > 0 && payments.length > 0) {
+            // Payment successful - create order
+            clearInterval(checkInterval);
+            setCheckingPayment(false);
+            await handlePaymentSuccess(paymentLink.cf_link_id);
+          }
+        }
+      } catch (error) {
+        console.error('Error checking payment status:', error);
+      }
+    }, 3000); // Check every 3 seconds
+
+    // Stop checking after 10 minutes
+    setTimeout(() => {
+      clearInterval(checkInterval);
+      setCheckingPayment(false);
+    }, 600000);
+  };
+
+  const handlePaymentSuccess = async (cfLinkId) => {
+    try {
+      // Create order with cf_link_id
+      const response = await customerService.createOrder({
+        ...orderData,
+        cf_link_id: cfLinkId
+      });
+      
+      if (response.success) {
+        setShowPaymentModal(false);
+        alert('Payment successful! 🎉 Your order has been confirmed.');
+        onClearCart();
+        setSpecialInstructions('');
+        setOrderData(null);
+        setPaymentLink(null);
+      } else {
+        alert('Order creation failed after payment. Please contact support.');
+      }
+    } catch (error) {
+      console.error('Error creating order after payment:', error);
+      alert('Order creation failed after payment. Please contact support.');
+    }
+  };
+
+  const copyLinkToClipboard = async () => {
+    if (paymentLink?.link_url) {
+      try {
+        await navigator.clipboard.writeText(paymentLink.link_url);
+        alert('Payment link copied to clipboard!');
+      } catch (error) {
+        console.error('Failed to copy link:', error);
+        alert('Failed to copy link');
+      }
+    }
+  };
+
+  const downloadQRCode = () => {
+    if (paymentLink?.link_qrcode) {
+      const link = document.createElement('a');
+      link.href = paymentLink.link_qrcode;
+      link.download = 'payment-qr-code.png';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
     }
   };
 
@@ -197,7 +329,7 @@ const CartManager = ({ cart, restaurant, onUpdateItem, onRemoveItem, onClearCart
             <div key={item.id} className="flex items-center justify-between">
               <div className="flex-1">
                 <h4 className="font-medium text-gray-900">{item.name}</h4>
-                <p className="text-sm text-gray-600">${item.price.toFixed(2)} each</p>
+                <p className="text-sm text-gray-600">₹{item.price.toFixed(2)} each</p>
               </div>
               
               <div className="flex items-center space-x-2">
@@ -231,27 +363,27 @@ const CartManager = ({ cart, restaurant, onUpdateItem, onRemoveItem, onClearCart
         <div className="space-y-2 text-sm">
           <div className="flex justify-between">
             <span>Subtotal</span>
-            <span>${calculateSubtotal().toFixed(2)}</span>
+            <span>₹{calculateSubtotal().toFixed(2)}</span>
           </div>
           <div className="flex justify-between">
             <span>Delivery Fee</span>
-            <span>${calculateDeliveryFee().toFixed(2)}</span>
+            <span>₹{calculateDeliveryFee().toFixed(2)}</span>
           </div>
           <div className="flex justify-between">
-            <span>Tax</span>
-            <span>${calculateTax().toFixed(2)}</span>
+            <span>GST (18%)</span>
+            <span>₹{calculateTax().toFixed(2)}</span>
           </div>
           <div className="flex justify-between font-semibold text-base pt-2 border-t">
             <span>Total</span>
-            <span>${calculateTotal().toFixed(2)}</span>
+            <span>₹{calculateTotal().toFixed(2)}</span>
           </div>
         </div>
 
         {/* Minimum Order Check */}
         {restaurant?.min_order && calculateSubtotal() < restaurant.min_order && (
           <div className="mt-3 p-2 bg-yellow-50 border border-yellow-200 rounded text-sm text-yellow-800">
-            Minimum order: ${restaurant.min_order.toFixed(2)}. 
-            Add ${(restaurant.min_order - calculateSubtotal()).toFixed(2)} more.
+            Minimum order: ₹{restaurant.min_order.toFixed(2)}. 
+            Add ₹{(restaurant.min_order - calculateSubtotal()).toFixed(2)} more.
           </div>
         )}
 
@@ -295,13 +427,13 @@ const CartManager = ({ cart, restaurant, onUpdateItem, onRemoveItem, onClearCart
                   {cart.map(item => (
                     <div key={item.id} className="flex justify-between">
                       <span>{item.quantity}x {item.name}</span>
-                      <span>${(item.price * item.quantity).toFixed(2)}</span>
+                      <span>₹{(item.price * item.quantity).toFixed(2)}</span>
                     </div>
                   ))}
                   <div className="border-t pt-1 mt-2 font-medium">
                     <div className="flex justify-between">
                       <span>Total</span>
-                      <span>${calculateTotal().toFixed(2)}</span>
+                      <span>₹{calculateTotal().toFixed(2)}</span>
                     </div>
                   </div>
                 </div>
@@ -368,7 +500,6 @@ const CartManager = ({ cart, restaurant, onUpdateItem, onRemoveItem, onClearCart
                               )}
                             </div>
                             <p className="text-gray-600 ml-5">
-                              {/* Receiver info */}
                               {address.receiver_name && (
                                 <span className="text-gray-800 font-medium">
                                   👤 {address.receiver_name}
@@ -376,7 +507,6 @@ const CartManager = ({ cart, restaurant, onUpdateItem, onRemoveItem, onClearCart
                                   <br />
                                 </span>
                               )}
-                              {/* Address info */}
                               📍 {address.address_line_1}
                               {address.address_line_2 && <>, {address.address_line_2}</>}
                               <br />
@@ -388,6 +518,70 @@ const CartManager = ({ cart, restaurant, onUpdateItem, onRemoveItem, onClearCart
                     ))}
                   </div>
                 )}
+              </div>
+
+              {/* Payment Method */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Payment Method
+                </label>
+                <div className="space-y-2">
+                  <label className="flex items-center">
+                    <input
+                      type="radio"
+                      name="paymentMethod"
+                      value="upi"
+                      checked={paymentMethod === 'upi'}
+                      onChange={(e) => setPaymentMethod(e.target.value)}
+                      className="h-4 w-4 text-blue-600"
+                    />
+                    <span className="ml-2 text-sm">💳 UPI Payment (GPay, PhonePe, etc.)</span>
+                  </label>
+                  <label className="flex items-center">
+                    <input
+                      type="radio"
+                      name="paymentMethod"
+                      value="card"
+                      checked={paymentMethod === 'card'}
+                      onChange={(e) => setPaymentMethod(e.target.value)}
+                      className="h-4 w-4 text-blue-600"
+                    />
+                    <span className="ml-2 text-sm">💳 Credit/Debit Card</span>
+                  </label>
+                  <label className="flex items-center">
+                    <input
+                      type="radio"
+                      name="paymentMethod"
+                      value="netbanking"
+                      checked={paymentMethod === 'netbanking'}
+                      onChange={(e) => setPaymentMethod(e.target.value)}
+                      className="h-4 w-4 text-blue-600"
+                    />
+                    <span className="ml-2 text-sm">🏦 Net Banking</span>
+                  </label>
+                  <label className="flex items-center">
+                    <input
+                      type="radio"
+                      name="paymentMethod"
+                      value="wallet"
+                      checked={paymentMethod === 'wallet'}
+                      onChange={(e) => setPaymentMethod(e.target.value)}
+                      className="h-4 w-4 text-blue-600"
+                    />
+                    <span className="ml-2 text-sm">👛 Digital Wallet</span>
+                  </label>
+                  <label className="flex items-center">
+                    <input
+                      type="radio"
+                      name="paymentMethod"
+                      value="cash"
+                      checked={paymentMethod === 'cash'}
+                      onChange={(e) => setPaymentMethod(e.target.value)}
+                      className="h-4 w-4 text-blue-600"
+                    />
+                    <span className="ml-2 text-sm">💵 Cash on Delivery</span>
+                  </label>
+                </div>
               </div>
 
               {/* Special Instructions */}
@@ -402,22 +596,6 @@ const CartManager = ({ cart, restaurant, onUpdateItem, onRemoveItem, onClearCart
                   rows={2}
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 />
-              </div>
-
-              {/* Payment Method */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Payment Method
-                </label>
-                <select
-                  value={paymentMethod}
-                  onChange={(e) => setPaymentMethod(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                >
-                  <option value="cash">Cash on Delivery</option>
-                  <option value="card">Credit/Debit Card</option>
-                  <option value="digital">Digital Wallet</option>
-                </select>
               </div>
 
               {/* Estimated Delivery Time */}
@@ -447,10 +625,100 @@ const CartManager = ({ cart, restaurant, onUpdateItem, onRemoveItem, onClearCart
                       : 'bg-green-600 hover:bg-green-700 text-white'
                   }`}
                 >
-                  {isCheckingOut ? 'Placing Order...' : 'Place Order'}
+                  {isCheckingOut ? 'Processing...' : paymentMethod === 'cash' ? 'Place Order' : 'Pay Now'}
                 </button>
               </div>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Payment Link Modal */}
+      {showPaymentModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg max-w-md w-full mx-4 p-6">
+            <div className="flex justify-between items-center mb-6">
+              <h2 className="text-xl font-semibold text-gray-900">Complete Payment</h2>
+              <button
+                onClick={() => setShowPaymentModal(false)}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                ✕
+              </button>
+            </div>
+
+            {!paymentLink && (
+              <div className="text-center py-8">
+                <button
+                  onClick={createPaymentLink}
+                  disabled={paymentLoading}
+                  className="w-full py-3 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 font-medium"
+                >
+                  {paymentLoading ? 'Creating Payment Link...' : 'Create Payment Link'}
+                </button>
+              </div>
+            )}
+
+            {paymentLink && (
+              <div className="space-y-6">
+                {/* Payment Amount */}
+                <div className="text-center">
+                  <h3 className="text-2xl font-bold text-green-600">₹{paymentLink.link_amount}</h3>
+                  <p className="text-gray-600">Payment for {restaurant?.name}</p>
+                </div>
+
+                {/* QR Code */}
+                {paymentLink.link_qrcode && (
+                  <div className="text-center">
+                    <div className="inline-block p-4 bg-white border-2 border-gray-200 rounded-lg">
+                      <img 
+                        src={paymentLink.link_qrcode} 
+                        alt="Payment QR Code"
+                        className="w-48 h-48 mx-auto"
+                      />
+                    </div>
+                    <p className="text-sm text-gray-600 mt-2">Scan QR code with any UPI app</p>
+                    <button
+                      onClick={downloadQRCode}
+                      className="text-blue-600 hover:text-blue-700 text-sm font-medium mt-1"
+                    >
+                      Download QR Code
+                    </button>
+                  </div>
+                )}
+
+                {/* Payment Options */}
+                <div className="space-y-3">
+                  <button
+                    onClick={handleOpenPaymentLink}
+                    disabled={checkingPayment}
+                    className="w-full py-3 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 font-medium"
+                  >
+                    {checkingPayment ? 'Waiting for Payment...' : 'Pay Now'}
+                  </button>
+
+                  <button
+                    onClick={copyLinkToClipboard}
+                    className="w-full py-2 border border-gray-300 text-gray-700 rounded-md hover:bg-gray-50 font-medium"
+                  >
+                    Copy Payment Link
+                  </button>
+                </div>
+
+                {/* Payment Status */}
+                {checkingPayment && (
+                  <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+                    <div className="flex items-center text-yellow-800">
+                      <div className="animate-spin h-4 w-4 border-2 border-yellow-600 border-t-transparent rounded-full mr-2"></div>
+                      <span className="text-sm">Waiting for payment confirmation...</span>
+                    </div>
+                    <p className="text-xs text-yellow-700 mt-1">
+                      Complete your payment in the opened tab. This will automatically detect when payment is successful.
+                    </p>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -473,19 +741,6 @@ const CartManager = ({ cart, restaurant, onUpdateItem, onRemoveItem, onClearCart
                   placeholder="Full name of person receiving order"
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
                   required
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Receiver Phone (Optional)
-                </label>
-                <input
-                  type="tel"
-                  value={newAddress.receiver_phone}
-                  onChange={(e) => setNewAddress(prev => ({ ...prev, receiver_phone: e.target.value }))}
-                  placeholder="Phone for delivery contact"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
                 />
               </div>
 

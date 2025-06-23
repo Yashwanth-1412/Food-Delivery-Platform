@@ -1,4 +1,4 @@
-# backend/services/agent_service.py
+# backend/services/agent_service.py - COMPLETE FIXED VERSION
 from datetime import datetime, timedelta
 from typing import List, Dict, Any, Optional
 from config.firebase import db
@@ -9,29 +9,41 @@ class AgentService:
         self.db = db
 
     # ===== AVAILABLE ORDERS =====
-    
+
     def get_available_orders(self, radius: int = 10, limit: int = 20) -> List[Dict[str, Any]]:
         """Get orders available for pickup by agents"""
         try:
-            # Get orders that are ready for pickup (restaurant prepared, no agent assigned)
+            # Get orders that are confirmed by restaurant but not assigned to any agent
             orders_ref = self.db.collection('orders')
-            query = orders_ref.where('status', '==', 'ready').where('agent_id', '==', None).limit(limit)
+            
+            # Query for confirmed OR ready orders without agent assignment
+            query = orders_ref.where('status', 'in', ['confirmed', 'ready'])
             
             available_orders = []
             for doc in query.stream():
                 order_data = doc.to_dict()
                 order_data['id'] = doc.id
                 
-                # Get restaurant details
-                restaurant_data = self._get_restaurant_details(order_data.get('restaurant_id'))
-                order_data['restaurant'] = restaurant_data
-                
-                # Calculate estimated delivery fee
-                order_data['delivery_fee'] = self._calculate_delivery_fee(order_data)
-                
-                available_orders.append(order_data)
+                # Check if order is not assigned to any agent
+                if not order_data.get('agent_id'):
+                    # Get restaurant details
+                    restaurant_data = self._get_restaurant_details(order_data.get('restaurant_id'))
+                    order_data['restaurant'] = restaurant_data
+                    
+                    # Calculate estimated delivery fee
+                    order_data['delivery_fee'] = self._calculate_delivery_fee(order_data)
+                    
+                    # Add time since order was created
+                    if 'created_at' in order_data:
+                        order_data['time_since_created'] = self._calculate_time_since(order_data['created_at'])
+                    
+                    available_orders.append(order_data)
             
-            return available_orders
+            # Sort by creation time (oldest first for fairness)
+            available_orders.sort(key=lambda x: x.get('created_at', datetime.min))
+            
+            # Apply limit
+            return available_orders[:limit]
         except Exception as e:
             raise Exception(f"Error getting available orders: {str(e)}")
 
@@ -46,8 +58,8 @@ class AgentService:
             
             order_data = order_doc.to_dict()
             
-            # Check if order is still available
-            if order_data.get('status') != 'ready' or order_data.get('agent_id'):
+            # Check if order is still available (confirmed OR ready and not assigned)
+            if order_data.get('status') not in ['confirmed', 'ready'] or order_data.get('agent_id'):
                 raise ValueError("Order is no longer available")
             
             # Update order with agent assignment
@@ -79,7 +91,7 @@ class AgentService:
     # ===== ACTIVE DELIVERIES =====
     
     def get_agent_active_orders(self, agent_id: str) -> List[Dict[str, Any]]:
-        """Get agent's active delivery orders"""
+        """Get agent's active delivery orders with proper customer info"""
         try:
             orders_ref = self.db.collection('orders')
             query = orders_ref.where('agent_id', '==', agent_id).where('status', 'in', 
@@ -90,9 +102,23 @@ class AgentService:
                 order_data = doc.to_dict()
                 order_data['id'] = doc.id
                 
-                # Get restaurant and customer details
-                order_data['restaurant'] = self._get_restaurant_details(order_data.get('restaurant_id'))
-                order_data['customer'] = self._get_customer_details(order_data.get('customer_id'))
+                # Get restaurant details
+                restaurant_data = self._get_restaurant_details(order_data.get('restaurant_id'))
+                order_data['restaurant'] = restaurant_data
+                
+                # Get customer details from order data first (better info), then fallback
+                customer_info = {
+                    'name': order_data.get('customer_name') or order_data.get('receiver_name', 'Customer'),
+                    'phone': order_data.get('customer_phone') or order_data.get('receiver_phone', ''),
+                    'email': order_data.get('customer_email', '')
+                }
+                
+                # If customer info not in order, try to get from customer service
+                if not customer_info['name'] or customer_info['name'] == 'Customer':
+                    customer_details = self._get_customer_details(order_data.get('customer_id'))
+                    customer_info.update(customer_details)
+                
+                order_data['customer'] = customer_info
                 
                 active_orders.append(order_data)
             
@@ -416,6 +442,30 @@ class AgentService:
 
     # ===== HELPER METHODS =====
     
+    def _calculate_time_since(self, created_at) -> str:
+        """Calculate time since order was created"""
+        try:
+            if isinstance(created_at, str):
+                created_time = datetime.fromisoformat(created_at.replace('Z', '+00:00'))
+            else:
+                created_time = created_at
+            
+            now = datetime.utcnow()
+            time_diff = now - created_time
+            
+            if time_diff.days > 0:
+                return f"{time_diff.days} days ago"
+            elif time_diff.seconds > 3600:
+                hours = time_diff.seconds // 3600
+                return f"{hours} hours ago"
+            elif time_diff.seconds > 60:
+                minutes = time_diff.seconds // 60
+                return f"{minutes} minutes ago"
+            else:
+                return "Just now"
+        except Exception:
+            return "Unknown"
+    
     def _update_agent_status_internal(self, agent_id: str, status: str, location: Optional[Dict] = None) -> Dict[str, Any]:
         """Internal method to update agent status"""
         update_data = {
@@ -444,8 +494,9 @@ class AgentService:
             return {'name': 'Unknown Restaurant'}
 
     def _get_customer_details(self, customer_id: str) -> Dict[str, Any]:
-        """Get customer details"""
+        """Get customer details with proper info"""
         try:
+            # First try to get from users collection
             user_ref = self.db.collection('users').document(customer_id)
             user_doc = user_ref.get()
             
@@ -453,11 +504,26 @@ class AgentService:
                 user_data = user_doc.to_dict()
                 return {
                     'name': user_data.get('name', 'Customer'),
-                    'phone': user_data.get('phone', '')
+                    'phone': user_data.get('phone', ''),
+                    'email': user_data.get('email', '')
                 }
-            return {'name': 'Customer', 'phone': ''}
-        except:
-            return {'name': 'Customer', 'phone': ''}
+            
+            # If not found in users, try customers collection
+            customer_ref = self.db.collection('customers').document(customer_id)
+            customer_doc = customer_ref.get()
+            
+            if customer_doc.exists:
+                customer_data = customer_doc.to_dict()
+                return {
+                    'name': customer_data.get('name', 'Customer'),
+                    'phone': customer_data.get('phone', ''),
+                    'email': customer_data.get('email', '')
+                }
+            
+            return {'name': 'Customer', 'phone': '', 'email': ''}
+        except Exception as e:
+            print(f"Error getting customer details: {str(e)}")
+            return {'name': 'Customer', 'phone': '', 'email': ''}
 
     def _calculate_delivery_fee(self, order_data: Dict[str, Any]) -> float:
         """Calculate delivery fee for an order"""
