@@ -317,6 +317,8 @@ class CustomerService:
             address_doc = {
                 'customer_id': customer_id,
                 'label': address_data.get('label', ''),
+                'receiver_name': address_data.get('receiver_name', '').strip(),  # NEW FIELD
+                'receiver_phone': address_data.get('receiver_phone', '').strip(),  # NEW FIELD
                 'address_line_1': address_data['address_line_1'].strip(),
                 'address_line_2': address_data.get('address_line_2', '').strip(),
                 'city': address_data['city'].strip(),
@@ -343,7 +345,7 @@ class CustomerService:
             return address_doc
         except Exception as e:
             raise Exception(f"Error adding delivery address: {str(e)}")
-    
+
     def update_delivery_address(self, customer_id: str, address_id: str, address_data: Dict[str, Any]) -> Dict[str, Any]:
         """Update a delivery address"""
         try:
@@ -359,7 +361,8 @@ class CustomerService:
                 'updated_at': datetime.utcnow()
             }
             
-            allowed_fields = ['label', 'address_line_1', 'address_line_2', 'city', 'state', 'zip_code', 'is_default']
+            # Updated allowed fields to include receiver information
+            allowed_fields = ['label', 'receiver_name', 'receiver_phone', 'address_line_1', 'address_line_2', 'city', 'state', 'zip_code', 'is_default']
             for field in allowed_fields:
                 if field in address_data:
                     update_data[field] = address_data[field]
@@ -382,9 +385,9 @@ class CustomerService:
             address_data['id'] = address_id
             
             return address_data
-        except Exception as e:
+        except Exception as e: 
             raise Exception(f"Error updating delivery address: {str(e)}")
-    
+
     def delete_delivery_address(self, customer_id: str, address_id: str) -> bool:
         """Delete a delivery address"""
         try:
@@ -501,6 +504,181 @@ class CustomerService:
             return sorted(list(cuisines))
         except Exception as e:
             raise Exception(f"Error getting cuisine types: {str(e)}")
+
+
+    # backend/services/customer_service.py - Add these cart methods to the CustomerService class
+
+    # ===== CART MANAGEMENT =====
+
+    def get_pending_cart(self, customer_id: str) -> Dict[str, Any]:
+        """Get customer's pending cart"""
+        try:
+            doc_ref = self.db.collection('pending_carts').document(customer_id)
+            doc = doc_ref.get()
+            
+            if doc.exists:
+                cart_data = doc.to_dict()
+                cart_data['id'] = customer_id
+                return cart_data
+            else:
+                # Return empty cart structure
+                return {
+                    'customer_id': customer_id,
+                    'restaurant_id': None,
+                    'restaurant_info': None,
+                    'items': [],
+                    'created_at': None,
+                    'updated_at': None
+                }
+        except Exception as e:
+            raise Exception(f"Error getting pending cart: {str(e)}")
+
+    def save_pending_cart(self, customer_id: str, cart_data: Dict[str, Any]) -> Dict[str, Any]:
+        """Save customer's pending cart"""
+        try:
+            # Prepare cart document
+            cart_doc = {
+                'customer_id': customer_id,
+                'restaurant_id': cart_data.get('restaurant_id'),
+                'restaurant_info': cart_data.get('restaurant_info'),
+                'items': cart_data.get('items', []),
+                'updated_at': datetime.utcnow()
+            }
+            
+            # Set created_at only if it's a new cart
+            doc_ref = self.db.collection('pending_carts').document(customer_id)
+            existing_doc = doc_ref.get()
+            
+            if not existing_doc.exists:
+                cart_doc['created_at'] = datetime.utcnow()
+            
+            # Save or update cart
+            doc_ref.set(cart_doc)
+            
+            cart_doc['id'] = customer_id
+            return cart_doc
+        except Exception as e:
+            raise Exception(f"Error saving pending cart: {str(e)}")
+
+    def clear_pending_cart(self, customer_id: str) -> bool:
+        """Clear customer's pending cart"""
+        try:
+            doc_ref = self.db.collection('pending_carts').document(customer_id)
+            doc_ref.delete()
+            return True
+        except Exception as e:
+            raise Exception(f"Error clearing pending cart: {str(e)}")
+
+    def add_item_to_cart(self, customer_id: str, restaurant_id: str, restaurant_info: Dict, item_data: Dict[str, Any]) -> Dict[str, Any]:
+        """Add item to customer's pending cart"""
+        try:
+            # Get current cart
+            current_cart = self.get_pending_cart(customer_id)
+            
+            # If cart has items from different restaurant, clear it
+            if (current_cart.get('restaurant_id') and 
+                current_cart['restaurant_id'] != restaurant_id and 
+                len(current_cart.get('items', [])) > 0):
+                current_cart = {
+                    'customer_id': customer_id,
+                    'restaurant_id': None,
+                    'restaurant_info': None,
+                    'items': [],
+                    'created_at': None,
+                    'updated_at': None
+                }
+            
+            # Set restaurant info
+            current_cart['restaurant_id'] = restaurant_id
+            current_cart['restaurant_info'] = restaurant_info
+            
+            # Add or update item
+            items = current_cart.get('items', [])
+            existing_item_index = None
+            
+            for i, item in enumerate(items):
+                if item['id'] == item_data['id']:
+                    existing_item_index = i
+                    break
+            
+            if existing_item_index is not None:
+                # Update existing item quantity
+                items[existing_item_index]['quantity'] += item_data.get('quantity', 1)
+            else:
+                # Add new item
+                items.append({
+                    'id': item_data['id'],
+                    'name': item_data['name'],
+                    'price': item_data['price'],
+                    'quantity': item_data.get('quantity', 1),
+                    'description': item_data.get('description', ''),
+                    'image_url': item_data.get('image_url', '')
+                })
+            
+            current_cart['items'] = items
+            
+            # Save updated cart
+            return self.save_pending_cart(customer_id, current_cart)
+        except Exception as e:
+            raise Exception(f"Error adding item to cart: {str(e)}")
+
+    def remove_item_from_cart(self, customer_id: str, item_id: str) -> Dict[str, Any]:
+        """Remove item from customer's pending cart"""
+        try:
+            # Get current cart
+            current_cart = self.get_pending_cart(customer_id)
+            
+            # Remove item
+            items = current_cart.get('items', [])
+            items = [item for item in items if item['id'] != item_id]
+            current_cart['items'] = items
+            
+            # If cart is empty, clear restaurant info
+            if len(items) == 0:
+                current_cart['restaurant_id'] = None
+                current_cart['restaurant_info'] = None
+            
+            # Save updated cart
+            return self.save_pending_cart(customer_id, current_cart)
+        except Exception as e:
+            raise Exception(f"Error removing item from cart: {str(e)}")
+
+    def update_cart_item_quantity(self, customer_id: str, item_id: str, quantity: int) -> Dict[str, Any]:
+        """Update item quantity in customer's pending cart"""
+        try:
+            if quantity <= 0:
+                return self.remove_item_from_cart(customer_id, item_id)
+            
+            # Get current cart
+            current_cart = self.get_pending_cart(customer_id)
+            
+            # Update item quantity
+            items = current_cart.get('items', [])
+            for item in items:
+                if item['id'] == item_id:
+                    item['quantity'] = quantity
+                    break
+            
+            current_cart['items'] = items
+            
+            # Save updated cart
+            return self.save_pending_cart(customer_id, current_cart)
+        except Exception as e:
+            raise Exception(f"Error updating cart item quantity: {str(e)}")
+
+    def sync_cart_items(self, customer_id: str, cart_items: List[Dict], restaurant_info: Dict = None) -> Dict[str, Any]:
+        """Sync entire cart with frontend state"""
+        try:
+            cart_data = {
+                'customer_id': customer_id,
+                'restaurant_id': restaurant_info.get('id') if restaurant_info else None,
+                'restaurant_info': restaurant_info,
+                'items': cart_items
+            }
+            
+            return self.save_pending_cart(customer_id, cart_data)
+        except Exception as e:
+            raise Exception(f"Error syncing cart: {str(e)}")
 
 # Create a singleton instance
 customer_service = CustomerService()

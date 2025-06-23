@@ -45,16 +45,16 @@ const RestaurantDetails = ({ restaurant, onBack, onAddToCart, cart }) => {
     menu.categories.forEach(category => {
       if (category.items) {
         category.items.forEach(item => {
-          allItems.push({ ...item, categoryName: category.name });
+          allItems.push({ ...item, categoryId: category.id, categoryName: category.name });
         });
       }
     });
-
-    // Filter by category
+  
+    // Filter by category - FIXED
     if (selectedCategory !== 'all') {
       allItems = allItems.filter(item => item.categoryId === selectedCategory);
     }
-
+  
     // Filter by search term
     if (searchTerm) {
       allItems = allItems.filter(item =>
@@ -62,10 +62,10 @@ const RestaurantDetails = ({ restaurant, onBack, onAddToCart, cart }) => {
         item.description?.toLowerCase().includes(searchTerm.toLowerCase())
       );
     }
-
+  
     return allItems;
   };
-
+  
   const getCartItemQuantity = (itemId) => {
     const cartItem = cart.find(item => item.id === itemId);
     return cartItem ? cartItem.quantity : 0;

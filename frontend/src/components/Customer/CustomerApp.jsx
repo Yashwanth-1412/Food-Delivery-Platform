@@ -14,10 +14,89 @@ const CustomerApp = ({ user, userRole, onLogout }) => {
   const [cartRestaurant, setCartRestaurant] = useState(null);
   const [customerProfile, setCustomerProfile] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [cartSyncing, setCartSyncing] = useState(false);
 
   useEffect(() => {
     loadCustomerProfile();
+    loadCartFromDatabase();
   }, []);
+
+  // Auto-sync cart to database when cart changes (debounced)
+  useEffect(() => {
+    const timeoutId = setTimeout(() => {
+      if (cart.length > 0 || cartRestaurant) {
+        syncCartToDatabase();
+      }
+    }, 1000); // Wait 1 second after last change
+
+    return () => clearTimeout(timeoutId);
+  }, [cart, cartRestaurant]);
+
+  const loadCartFromDatabase = async () => {
+    try {
+      const response = await customerService.getPendingCart();
+      if (response.success && response.data) {
+        const cartData = response.data;
+        if (cartData.items && cartData.items.length > 0) {
+          setCart(cartData.items);
+          setCartRestaurant(cartData.restaurant_info);
+          console.log('Cart loaded from database:', cartData.items.length, 'items');
+        }
+      }
+    } catch (error) {
+      console.error('Error loading cart from database:', error);
+      // Fall back to localStorage if database fails
+      loadCartFromLocalStorage();
+    }
+  };
+
+  const syncCartToDatabase = async () => {
+    try {
+      setCartSyncing(true);
+      await customerService.syncCart(cart, cartRestaurant);
+      console.log('Cart synced to database');
+    } catch (error) {
+      console.error('Error syncing cart to database:', error);
+      // Fall back to localStorage
+      saveCartToLocalStorage();
+    } finally {
+      setCartSyncing(false);
+    }
+  };
+
+  // Fallback localStorage functions
+  const getCartStorageKey = (userId) => `cart_${userId}`;
+  const getCartRestaurantStorageKey = (userId) => `cart_restaurant_${userId}`;
+
+  const loadCartFromLocalStorage = () => {
+    if (!user?.uid) return;
+    
+    try {
+      const savedCart = JSON.parse(localStorage.getItem(getCartStorageKey(user.uid)) || '[]');
+      const savedRestaurant = JSON.parse(localStorage.getItem(getCartRestaurantStorageKey(user.uid)) || 'null');
+      
+      if (savedCart.length > 0) {
+        setCart(savedCart);
+        setCartRestaurant(savedRestaurant);
+        console.log('Cart loaded from localStorage (fallback):', savedCart.length, 'items');
+        // Sync to database
+        setTimeout(() => syncCartToDatabase(), 100);
+      }
+    } catch (error) {
+      console.error('Error loading cart from localStorage:', error);
+    }
+  };
+
+  const saveCartToLocalStorage = () => {
+    if (!user?.uid) return;
+    
+    try {
+      localStorage.setItem(getCartStorageKey(user.uid), JSON.stringify(cart));
+      localStorage.setItem(getCartRestaurantStorageKey(user.uid), JSON.stringify(cartRestaurant));
+    } catch (error) {
+      console.error('Error saving cart to localStorage:', error);
+    }
+  };
 
   const loadCustomerProfile = async () => {
     try {
@@ -52,7 +131,7 @@ const CustomerApp = ({ user, userRole, onLogout }) => {
     }
   };
 
-  const addToCart = (restaurant, item, quantity = 1) => {
+  const addToCart = async (restaurant, item, quantity = 1) => {
     // If cart has items from different restaurant, confirm switch
     if (cartRestaurant && cartRestaurant.id !== restaurant.id && cart.length > 0) {
       const confirmSwitch = window.confirm(
@@ -61,6 +140,13 @@ const CustomerApp = ({ user, userRole, onLogout }) => {
       if (!confirmSwitch) return;
       
       setCart([]);
+      setCartRestaurant(null);
+      // Clear in database
+      try {
+        await customerService.clearCart();
+      } catch (error) {
+        console.error('Error clearing cart in database:', error);
+      }
     }
 
     setCartRestaurant(restaurant);
@@ -76,9 +162,19 @@ const CustomerApp = ({ user, userRole, onLogout }) => {
       // Add new item
       setCart(prev => [...prev, { ...item, quantity }]);
     }
+
+    // Immediate sync for add to cart action
+    try {
+      await customerService.addItemToCart(restaurant.id, restaurant, {
+        ...item,
+        quantity
+      });
+    } catch (error) {
+      console.error('Error adding item to cart in database:', error);
+    }
   };
 
-  const updateCartItem = (itemId, quantity) => {
+  const updateCartItem = async (itemId, quantity) => {
     if (quantity <= 0) {
       removeFromCart(itemId);
       return;
@@ -87,20 +183,51 @@ const CustomerApp = ({ user, userRole, onLogout }) => {
     setCart(prev => prev.map(item => 
       item.id === itemId ? { ...item, quantity } : item
     ));
+
+    // Sync to database
+    try {
+      await customerService.updateCartItemQuantity(itemId, quantity);
+    } catch (error) {
+      console.error('Error updating cart item in database:', error);
+    }
   };
 
-  const removeFromCart = (itemId) => {
+  const removeFromCart = async (itemId) => {
     setCart(prev => prev.filter(item => item.id !== itemId));
     
     // Clear cart restaurant if cart becomes empty
     if (cart.length === 1) {
       setCartRestaurant(null);
     }
+
+    // Sync to database
+    try {
+      await customerService.removeCartItem(itemId);
+    } catch (error) {
+      console.error('Error removing cart item from database:', error);
+    }
   };
 
-  const clearCart = () => {
+  const clearCart = async () => {
     setCart([]);
     setCartRestaurant(null);
+
+    // Clear in database
+    try {
+      await customerService.clearCart();
+    } catch (error) {
+      console.error('Error clearing cart in database:', error);
+    }
+
+    // Clear localStorage backup
+    if (user?.uid) {
+      try {
+        localStorage.removeItem(getCartStorageKey(user.uid));
+        localStorage.removeItem(getCartRestaurantStorageKey(user.uid));
+      } catch (error) {
+        console.error('Error clearing localStorage:', error);
+      }
+    }
   };
 
   const getCartTotal = () => {
@@ -109,6 +236,18 @@ const CustomerApp = ({ user, userRole, onLogout }) => {
 
   const getCartItemCount = () => {
     return cart.reduce((total, item) => total + item.quantity, 0);
+  };
+
+  // Cart sync indicator component
+  const CartSyncIndicator = () => {
+    if (!cartSyncing) return null;
+
+    return (
+      <div className="fixed bottom-4 right-4 bg-blue-100 text-blue-800 px-3 py-1 rounded-full text-sm z-50 flex items-center">
+        <div className="animate-spin h-3 w-3 border-2 border-blue-600 border-t-transparent rounded-full mr-2"></div>
+        Syncing cart...
+      </div>
+    );
   };
 
   if (loading) {
@@ -186,6 +325,11 @@ const CustomerApp = ({ user, userRole, onLogout }) => {
                 {getCartItemCount() > 0 && (
                   <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full h-6 w-6 flex items-center justify-center">
                     {getCartItemCount()}
+                  </span>
+                )}
+                {cartSyncing && (
+                  <span className="absolute -bottom-1 -right-1 bg-blue-500 text-white text-xs rounded-full h-3 w-3 flex items-center justify-center">
+                    <div className="animate-spin h-2 w-2 border border-white border-t-transparent rounded-full"></div>
                   </span>
                 )}
               </button>
@@ -291,6 +435,9 @@ const CustomerApp = ({ user, userRole, onLogout }) => {
           </div>
         </div>
       )}
+
+      {/* Cart Sync Indicator */}
+      <CartSyncIndicator />
     </div>
   );
 };

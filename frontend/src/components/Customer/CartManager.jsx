@@ -1,13 +1,80 @@
 // frontend/src/components/Customer/CartManager.jsx
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { customerService } from '../../services/customerApi';
 
 const CartManager = ({ cart, restaurant, onUpdateItem, onRemoveItem, onClearCart, /*total, isModal = false*/ }) => {
   const [isCheckingOut, setIsCheckingOut] = useState(false);
   const [showCheckoutForm, setShowCheckoutForm] = useState(false);
-  const [deliveryAddress, setDeliveryAddress] = useState('');
+  const [addresses, setAddresses] = useState([]);
+  const [selectedAddress, setSelectedAddress] = useState('');
+  const [showAddAddress, setShowAddAddress] = useState(false);
+  const [addressLoading, setAddressLoading] = useState(false);
   const [specialInstructions, setSpecialInstructions] = useState('');
   const [paymentMethod, setPaymentMethod] = useState('cash');
+  const [newAddress, setNewAddress] = useState({
+    label: '',
+    receiver_name: '',
+    receiver_phone: '',
+    address_line_1: '',
+    address_line_2: '',
+    city: '',
+    state: '',
+    zip_code: '',
+    is_default: false
+  });
+
+  // Load addresses when checkout modal opens
+  useEffect(() => {
+    if (showCheckoutForm) {
+      loadAddresses();
+    }
+  }, [showCheckoutForm]);
+
+  const loadAddresses = async () => {
+    try {
+      setAddressLoading(true);
+      const response = await customerService.getDeliveryAddresses();
+      if (response.success) {
+        setAddresses(response.data);
+        // Auto-select default address
+        const defaultAddress = response.data.find(addr => addr.is_default);
+        if (defaultAddress) {
+          setSelectedAddress(defaultAddress.id);
+        } else if (response.data.length === 1) {
+          setSelectedAddress(response.data[0].id);
+        }
+      }
+    } catch (error) {
+      console.error('Error loading addresses:', error);
+    } finally {
+      setAddressLoading(false);
+    }
+  };
+
+  const handleAddAddress = async () => {
+    try {
+      const response = await customerService.addDeliveryAddress(newAddress);
+      if (response.success) {
+        await loadAddresses();
+        setShowAddAddress(false);
+        setSelectedAddress(response.data.id);
+        setNewAddress({
+          label: '',
+          receiver_name: '',
+          receiver_phone: '',
+          address_line_1: '',
+          address_line_2: '',
+          city: '',
+          state: '',
+          zip_code: '',
+          is_default: false
+        });
+      }
+    } catch (error) {
+      console.error('Error adding address:', error);
+      alert('Failed to add address. Please try again.');
+    }
+  };
 
   const handleQuantityChange = (itemId, change) => {
     const currentItem = cart.find(item => item.id === itemId);
@@ -38,8 +105,8 @@ const CartManager = ({ cart, restaurant, onUpdateItem, onRemoveItem, onClearCart
   };
 
   const handleCheckout = async () => {
-    if (!deliveryAddress.trim()) {
-      alert('Please enter a delivery address');
+    if (!selectedAddress) {
+      alert('Please select a delivery address');
       return;
     }
 
@@ -59,7 +126,7 @@ const CartManager = ({ cart, restaurant, onUpdateItem, onRemoveItem, onClearCart
           price: item.price,
           quantity: item.quantity
         })),
-        delivery_address: deliveryAddress,
+        delivery_address_id: selectedAddress,
         special_instructions: specialInstructions,
         payment_method: paymentMethod,
         subtotal: calculateSubtotal(),
@@ -75,7 +142,6 @@ const CartManager = ({ cart, restaurant, onUpdateItem, onRemoveItem, onClearCart
           alert('Order placed successfully! 🎉');
           onClearCart();
           setShowCheckoutForm(false);
-          setDeliveryAddress('');
           setSpecialInstructions('');
         } else {
           throw new Error(response.error || 'Failed to place order');
@@ -86,7 +152,6 @@ const CartManager = ({ cart, restaurant, onUpdateItem, onRemoveItem, onClearCart
         alert('Order placed successfully! 🎉 (Demo mode - order not actually processed)');
         onClearCart();
         setShowCheckoutForm(false);
-        setDeliveryAddress('');
         setSpecialInstructions('');
       }
     } catch (error) {
@@ -242,19 +307,87 @@ const CartManager = ({ cart, restaurant, onUpdateItem, onRemoveItem, onClearCart
                 </div>
               </div>
 
-              {/* Delivery Address */}
+              {/* Delivery Address Selection */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Delivery Address *
-                </label>
-                <textarea
-                  value={deliveryAddress}
-                  onChange={(e) => setDeliveryAddress(e.target.value)}
-                  placeholder="Enter your complete delivery address..."
-                  rows={3}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  required
-                />
+                <div className="flex justify-between items-center mb-2">
+                  <label className="block text-sm font-medium text-gray-700">
+                    Delivery Address *
+                  </label>
+                  <button
+                    onClick={() => setShowAddAddress(true)}
+                    className="text-sm text-blue-600 hover:text-blue-700 font-medium"
+                  >
+                    + Add New
+                  </button>
+                </div>
+
+                {addressLoading ? (
+                  <div className="text-center py-4">
+                    <div className="animate-spin h-4 w-4 border-2 border-blue-500 border-t-transparent rounded-full mx-auto mb-2"></div>
+                    <p className="text-sm text-gray-500">Loading addresses...</p>
+                  </div>
+                ) : addresses.length === 0 ? (
+                  <div className="text-center py-4 border-2 border-dashed border-gray-300 rounded-lg">
+                    <span className="text-2xl mb-2 block">📍</span>
+                    <p className="text-sm text-gray-500 mb-2">No saved addresses</p>
+                    <button
+                      onClick={() => setShowAddAddress(true)}
+                      className="text-sm bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded"
+                    >
+                      Add Your First Address
+                    </button>
+                  </div>
+                ) : (
+                  <div className="space-y-2 max-h-32 overflow-y-auto">
+                    {addresses.map((address) => (
+                      <div
+                        key={address.id}
+                        className={`border rounded-lg p-3 cursor-pointer text-sm ${
+                          selectedAddress === address.id
+                            ? 'border-blue-500 bg-blue-50'
+                            : 'border-gray-200 hover:border-gray-300'
+                        }`}
+                        onClick={() => setSelectedAddress(address.id)}
+                      >
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <div className="flex items-center gap-2 mb-1">
+                              <input
+                                type="radio"
+                                checked={selectedAddress === address.id}
+                                onChange={() => setSelectedAddress(address.id)}
+                                className="text-blue-600"
+                              />
+                              <span className="font-medium">
+                                {address.label || 'Address'}
+                              </span>
+                              {address.is_default && (
+                                <span className="bg-green-100 text-green-800 text-xs px-1 py-0.5 rounded">
+                                  Default
+                                </span>
+                              )}
+                            </div>
+                            <p className="text-gray-600 ml-5">
+                              {/* Receiver info */}
+                              {address.receiver_name && (
+                                <span className="text-gray-800 font-medium">
+                                  👤 {address.receiver_name}
+                                  {address.receiver_phone && ` 📞 ${address.receiver_phone}`}
+                                  <br />
+                                </span>
+                              )}
+                              {/* Address info */}
+                              📍 {address.address_line_1}
+                              {address.address_line_2 && <>, {address.address_line_2}</>}
+                              <br />
+                              {address.city}, {address.state} {address.zip_code}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
 
               {/* Special Instructions */}
@@ -307,9 +440,9 @@ const CartManager = ({ cart, restaurant, onUpdateItem, onRemoveItem, onClearCart
                 </button>
                 <button
                   onClick={handleCheckout}
-                  disabled={isCheckingOut || !deliveryAddress.trim()}
+                  disabled={isCheckingOut || !selectedAddress}
                   className={`flex-1 py-2 px-4 rounded-md font-medium transition-colors ${
-                    isCheckingOut || !deliveryAddress.trim()
+                    isCheckingOut || !selectedAddress
                       ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
                       : 'bg-green-600 hover:bg-green-700 text-white'
                   }`}
@@ -317,6 +450,153 @@ const CartManager = ({ cart, restaurant, onUpdateItem, onRemoveItem, onClearCart
                   {isCheckingOut ? 'Placing Order...' : 'Place Order'}
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Add Address Modal */}
+      {showAddAddress && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[60]">
+          <div className="bg-white rounded-lg p-4 w-full max-w-sm mx-4">
+            <h4 className="text-lg font-semibold text-gray-900 mb-3">Add New Address</h4>
+            
+            <div className="space-y-3">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Receiver Name *
+                </label>
+                <input
+                  type="text"
+                  value={newAddress.receiver_name}
+                  onChange={(e) => setNewAddress(prev => ({ ...prev, receiver_name: e.target.value }))}
+                  placeholder="Full name of person receiving order"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Receiver Phone (Optional)
+                </label>
+                <input
+                  type="tel"
+                  value={newAddress.receiver_phone}
+                  onChange={(e) => setNewAddress(prev => ({ ...prev, receiver_phone: e.target.value }))}
+                  placeholder="Phone for delivery contact"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Label (Optional)
+                </label>
+                <input
+                  type="text"
+                  value={newAddress.label}
+                  onChange={(e) => setNewAddress(prev => ({ ...prev, label: e.target.value }))}
+                  placeholder="Home, Work, etc."
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Address Line 1 *
+                </label>
+                <input
+                  type="text"
+                  value={newAddress.address_line_1}
+                  onChange={(e) => setNewAddress(prev => ({ ...prev, address_line_1: e.target.value }))}
+                  placeholder="Street address"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Address Line 2 (Optional)
+                </label>
+                <input
+                  type="text"
+                  value={newAddress.address_line_2}
+                  onChange={(e) => setNewAddress(prev => ({ ...prev, address_line_2: e.target.value }))}
+                  placeholder="Apartment, suite, etc."
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    City *
+                  </label>
+                  <input
+                    type="text"
+                    value={newAddress.city}
+                    onChange={(e) => setNewAddress(prev => ({ ...prev, city: e.target.value }))}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    State *
+                  </label>
+                  <input
+                    type="text"
+                    value={newAddress.state}
+                    onChange={(e) => setNewAddress(prev => ({ ...prev, state: e.target.value }))}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                    required
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  ZIP Code *
+                </label>
+                <input
+                  type="text"
+                  value={newAddress.zip_code}
+                  onChange={(e) => setNewAddress(prev => ({ ...prev, zip_code: e.target.value }))}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                  required
+                />
+              </div>
+
+              <div className="flex items-center">
+                <input
+                  type="checkbox"
+                  checked={newAddress.is_default}
+                  onChange={(e) => setNewAddress(prev => ({ ...prev, is_default: e.target.checked }))}
+                  className="mr-2 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                />
+                <label className="text-sm text-gray-700">
+                  Set as default address
+                </label>
+              </div>
+            </div>
+
+            <div className="flex space-x-2 mt-4">
+              <button
+                onClick={() => setShowAddAddress(false)}
+                className="flex-1 py-2 px-3 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50 text-sm"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleAddAddress}
+                disabled={!newAddress.receiver_name || !newAddress.address_line_1 || !newAddress.city || !newAddress.state || !newAddress.zip_code}
+                className="flex-1 py-2 px-3 bg-blue-600 hover:bg-blue-700 text-white rounded-md disabled:opacity-50 text-sm"
+              >
+                Add Address
+              </button>
             </div>
           </div>
         </div>

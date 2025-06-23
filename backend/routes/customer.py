@@ -47,7 +47,6 @@ def get_available_restaurants():
         }), 500
 
 # ===== DELIVERY ADDRESSES =====
-
 @customer_bp.route('/addresses', methods=['GET'])
 @require_role(UserRole.CUSTOMER, UserRole.ADMIN)
 def get_delivery_addresses():
@@ -55,7 +54,7 @@ def get_delivery_addresses():
     try:
         uid = get_current_user_id()
         addresses = customer_service.get_delivery_addresses(uid)
-        
+       
         return jsonify({
             'success': True,
             'data': addresses
@@ -73,18 +72,18 @@ def add_delivery_address():
     try:
         uid = get_current_user_id()
         address_data = request.get_json()
-        
-        # Validate required fields
-        required_fields = ['address_line_1', 'city', 'state', 'zip_code']
+       
+        # Updated required fields to include receiver_name
+        required_fields = ['receiver_name', 'address_line_1', 'city', 'state', 'zip_code']
         for field in required_fields:
             if field not in address_data or not address_data[field].strip():
                 return jsonify({
                     'success': False,
                     'error': f'Missing required field: {field}'
                 }), 400
-        
+       
         address = customer_service.add_delivery_address(uid, address_data)
-        
+       
         return jsonify({
             'success': True,
             'message': 'Address added successfully',
@@ -103,9 +102,9 @@ def update_delivery_address(address_id):
     try:
         uid = get_current_user_id()
         address_data = request.get_json()
-        
+       
         updated_address = customer_service.update_delivery_address(uid, address_id, address_data)
-        
+       
         return jsonify({
             'success': True,
             'message': 'Address updated successfully',
@@ -124,7 +123,7 @@ def delete_delivery_address(address_id):
     try:
         uid = get_current_user_id()
         customer_service.delete_delivery_address(uid, address_id)
-        
+       
         return jsonify({
             'success': True,
             'message': 'Address deleted successfully'
@@ -134,7 +133,7 @@ def delete_delivery_address(address_id):
             'success': False,
             'error': str(e)
         }), 500
-
+        
 # ===== FAVORITES =====
 
 @customer_bp.route('/favorites', methods=['GET'])
@@ -414,6 +413,174 @@ def update_customer_profile():
             'success': True,
             'message': 'Profile updated successfully',
             'data': updated_profile
+        })
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
+# ===== CART MANAGEMENT =====
+
+@customer_bp.route('/cart', methods=['GET'])
+@require_role(UserRole.CUSTOMER, UserRole.ADMIN)
+def get_pending_cart():
+    """Get customer's pending cart"""
+    try:
+        uid = get_current_user_id()
+        cart = customer_service.get_pending_cart(uid)
+        
+        return jsonify({
+            'success': True,
+            'data': cart
+        })
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+@customer_bp.route('/cart', methods=['POST'])
+@require_role(UserRole.CUSTOMER, UserRole.ADMIN)
+def save_pending_cart():
+    """Save customer's pending cart"""
+    try:
+        uid = get_current_user_id()
+        cart_data = request.get_json()
+        
+        cart = customer_service.save_pending_cart(uid, cart_data)
+        
+        return jsonify({
+            'success': True,
+            'message': 'Cart saved successfully',
+            'data': cart
+        })
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+@customer_bp.route('/cart/sync', methods=['POST'])
+@require_role(UserRole.CUSTOMER, UserRole.ADMIN)
+def sync_cart():
+    """Sync entire cart with frontend state"""
+    try:
+        uid = get_current_user_id()
+        data = request.get_json()
+        
+        cart_items = data.get('items', [])
+        restaurant_info = data.get('restaurant_info')
+        
+        cart = customer_service.sync_cart_items(uid, cart_items, restaurant_info)
+        
+        return jsonify({
+            'success': True,
+            'message': 'Cart synced successfully',
+            'data': cart
+        })
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+@customer_bp.route('/cart/items', methods=['POST'])
+@require_role(UserRole.CUSTOMER, UserRole.ADMIN)
+def add_item_to_cart():
+    """Add item to customer's pending cart"""
+    try:
+        uid = get_current_user_id()
+        data = request.get_json()
+        
+        # Validate required fields
+        required_fields = ['restaurant_id', 'restaurant_info', 'item']
+        for field in required_fields:
+            if field not in data:
+                return jsonify({
+                    'success': False,
+                    'error': f'Missing required field: {field}'
+                }), 400
+        
+        cart = customer_service.add_item_to_cart(
+            uid, 
+            data['restaurant_id'], 
+            data['restaurant_info'], 
+            data['item']
+        )
+        
+        return jsonify({
+            'success': True,
+            'message': 'Item added to cart',
+            'data': cart
+        })
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+@customer_bp.route('/cart/items/<item_id>', methods=['PUT'])
+@require_role(UserRole.CUSTOMER, UserRole.ADMIN)
+def update_cart_item(item_id):
+    """Update item quantity in cart"""
+    try:
+        uid = get_current_user_id()
+        data = request.get_json()
+        
+        quantity = data.get('quantity')
+        if quantity is None:
+            return jsonify({
+                'success': False,
+                'error': 'Quantity is required'
+            }), 400
+        
+        cart = customer_service.update_cart_item_quantity(uid, item_id, quantity)
+        
+        return jsonify({
+            'success': True,
+            'message': 'Cart item updated',
+            'data': cart
+        })
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+@customer_bp.route('/cart/items/<item_id>', methods=['DELETE'])
+@require_role(UserRole.CUSTOMER, UserRole.ADMIN)
+def remove_cart_item(item_id):
+    """Remove item from cart"""
+    try:
+        uid = get_current_user_id()
+        
+        cart = customer_service.remove_item_from_cart(uid, item_id)
+        
+        return jsonify({
+            'success': True,
+            'message': 'Item removed from cart',
+            'data': cart
+        })
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+@customer_bp.route('/cart', methods=['DELETE'])
+@require_role(UserRole.CUSTOMER, UserRole.ADMIN)
+def clear_cart():
+    """Clear customer's pending cart"""
+    try:
+        uid = get_current_user_id()
+        
+        customer_service.clear_pending_cart(uid)
+        
+        return jsonify({
+            'success': True,
+            'message': 'Cart cleared successfully'
         })
     except Exception as e:
         return jsonify({

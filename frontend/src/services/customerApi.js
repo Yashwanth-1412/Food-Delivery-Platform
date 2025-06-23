@@ -367,6 +367,99 @@ class CustomerService {
 
     return menus[restaurantId] || { success: false, error: 'Restaurant not found' };
   }
+  // frontend/src/services/customerApi.js - Add these cart methods
+
+  // ===== CART MANAGEMENT =====
+
+  async getPendingCart() {
+    try {
+      return await this.makeRequest('/customer/cart');
+    } catch (error) {
+      console.error('Error fetching pending cart:', error);
+      throw error;
+    }
+  }
+
+  async savePendingCart(cartData) {
+    try {
+      return await this.makeRequest('/customer/cart', {
+        method: 'POST',
+        body: JSON.stringify(cartData),
+      });
+    } catch (error) {
+      console.error('Error saving pending cart:', error);
+      throw error;
+    }
+  }
+
+  async syncCart(cartItems, restaurantInfo) {
+    try {
+      return await this.makeRequest('/customer/cart/sync', {
+        method: 'POST',
+        body: JSON.stringify({
+          items: cartItems,
+          restaurant_info: restaurantInfo
+        }),
+      });
+    } catch (error) {
+      console.error('Error syncing cart:', error);
+      throw error;
+    }
+  }
+
+  async addItemToCart(restaurantId, restaurantInfo, item) {
+    try {
+      return await this.makeRequest('/customer/cart/items', {
+        method: 'POST',
+        body: JSON.stringify({
+          restaurant_id: restaurantId,
+          restaurant_info: restaurantInfo,
+          item: item
+        }),
+      });
+    } catch (error) {
+      console.error('Error adding item to cart:', error);
+      throw error;
+    }
+  }
+
+  async updateCartItemQuantity(itemId, quantity) {
+    try {
+      return await this.makeRequest(`/customer/cart/items/${itemId}`, {
+        method: 'PUT',
+        body: JSON.stringify({ quantity }),
+      });
+    } catch (error) {
+      console.error('Error updating cart item:', error);
+      throw error;
+    }
+  }
+
+  async removeCartItem(itemId) {
+    try {
+      return await this.makeRequest(`/customer/cart/items/${itemId}`, {
+        method: 'DELETE',
+      });
+    } catch (error) {
+      console.error('Error removing cart item:', error);
+      throw error;
+    }
+  }
+
+  async clearCart() {
+    try {
+      return await this.makeRequest('/customer/cart', {
+        method: 'DELETE',
+      });
+    } catch (error) {
+      console.error('Error clearing cart:', error);
+      throw error;
+    }
+  }
+
+
+
+
 }
 
 const customerService = new CustomerService();

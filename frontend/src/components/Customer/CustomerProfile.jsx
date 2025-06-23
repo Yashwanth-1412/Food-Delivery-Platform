@@ -1,5 +1,5 @@
 // frontend/src/components/Customer/CustomerProfile.jsx
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { customerService } from '../../services/customerApi';
 import roleService from '../../services/roleApi';
 
@@ -10,10 +10,12 @@ const CustomerProfile = ({ profile, onUpdate }) => {
     email: profile?.email || '',
     phone: profile?.phone || '',
   });
-  const [addresses, setAddresses] = useState(profile?.addresses || []);
-  const [showAddAddress, setShowAddAddress] = useState(false);
+  const [addresses, setAddresses] = useState([]); // ADDED: Missing addresses state
+  const [showAddAddress, setShowAddAddress] = useState(false); // ADDED: Missing showAddAddress state
   const [newAddress, setNewAddress] = useState({
     label: '',
+    receiver_name: '', // UPDATED: Added receiver_name
+    receiver_phone: '', // UPDATED: Added receiver_phone
     address_line_1: '',
     address_line_2: '',
     city: '',
@@ -31,6 +33,25 @@ const CustomerProfile = ({ profile, onUpdate }) => {
   const [passwordError, setPasswordError] = useState('');
   const [passwordSuccess, setPasswordSuccess] = useState('');
   const [isUpdatingPassword, setIsUpdatingPassword] = useState(false);
+
+  // ADDED: Load addresses on component mount
+  useEffect(() => {
+    loadAddresses();
+  }, []);
+
+  // ADDED: Load addresses function
+  const loadAddresses = async () => {
+    try {
+      const response = await customerService.getDeliveryAddresses();
+      if (response.success) {
+        setAddresses(response.data);
+      }
+    } catch (error) {
+      console.error('Error loading addresses:', error);
+      // Set empty array as fallback
+      setAddresses([]);
+    }
+  };
 
   const handlePasswordChange = (e) => {
     const { name, value } = e.target;
@@ -123,8 +144,9 @@ const CustomerProfile = ({ profile, onUpdate }) => {
   };
 
   const handleAddAddress = async () => {
-    if (!newAddress.address_line_1 || !newAddress.city || !newAddress.state || !newAddress.zip_code) {
-      alert('Please fill in all required address fields');
+    // UPDATED: Include receiver_name in validation
+    if (!newAddress.receiver_name || !newAddress.address_line_1 || !newAddress.city || !newAddress.state || !newAddress.zip_code) {
+      alert('Please fill in all required fields (Receiver Name, Address Line 1, City, State, ZIP Code)');
       return;
     }
 
@@ -135,9 +157,12 @@ const CustomerProfile = ({ profile, onUpdate }) => {
       try {
         const response = await customerService.addDeliveryAddress(newAddress);
         if (response.success) {
-          setAddresses(prev => [...prev, { ...newAddress, id: Date.now() }]);
+          // FIXED: Reload addresses from server instead of manually updating
+          await loadAddresses();
           setNewAddress({
             label: '',
+            receiver_name: '', // UPDATED: Reset receiver_name
+            receiver_phone: '', // UPDATED: Reset receiver_phone
             address_line_1: '',
             address_line_2: '',
             city: '',
@@ -156,6 +181,8 @@ const CustomerProfile = ({ profile, onUpdate }) => {
         setAddresses(prev => [...prev, { ...newAddress, id: Date.now() }]);
         setNewAddress({
           label: '',
+          receiver_name: '', // UPDATED: Reset receiver_name
+          receiver_phone: '', // UPDATED: Reset receiver_phone
           address_line_1: '',
           address_line_2: '',
           city: '',
@@ -186,7 +213,8 @@ const CustomerProfile = ({ profile, onUpdate }) => {
       try {
         const response = await customerService.deleteDeliveryAddress(addressId);
         if (response.success) {
-          setAddresses(prev => prev.filter(addr => addr.id !== addressId));
+          // FIXED: Reload addresses from server
+          await loadAddresses();
           alert('Address deleted successfully!');
         } else {
           throw new Error(response.error || 'Failed to delete address');
@@ -249,6 +277,21 @@ const CustomerProfile = ({ profile, onUpdate }) => {
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Name</label>
+            {isEditing ? (
+              <input
+                type="text"
+                name="name"
+                value={formData.name}
+                onChange={handleInputChange}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              />
+            ) : (
+              <p className="text-gray-900">{profile?.name || 'Not provided'}</p>
+            )}
+          </div>
+
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
             {isEditing ? (
@@ -321,8 +364,20 @@ const CustomerProfile = ({ profile, onUpdate }) => {
                         </span>
                       )}
                     </div>
+                    
+                    {/* UPDATED: Display receiver information */}
+                    {address.receiver_name && (
+                      <p className="text-gray-800 text-sm font-medium mb-1">
+                        👤 {address.receiver_name}
+                        {address.receiver_phone && (
+                          <span className="text-gray-600 ml-2">📞 {address.receiver_phone}</span>
+                        )}
+                      </p>
+                    )}
+                    
+                    {/* Address Information */}
                     <p className="text-gray-600 text-sm">
-                      {address.address_line_1}
+                      📍 {address.address_line_1}
                       {address.address_line_2 && <>, {address.address_line_2}</>}
                       <br />
                       {address.city}, {address.state} {address.zip_code}
@@ -497,21 +552,13 @@ const CustomerProfile = ({ profile, onUpdate }) => {
       {/* Add Address Modal */}
       {showAddAddress && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-lg max-w-md w-full">
-            <div className="p-4 border-b flex justify-between items-center">
-              <h3 className="text-lg font-semibold">Add New Address</h3>
-              <button
-                onClick={() => setShowAddAddress(false)}
-                className="text-gray-500 hover:text-gray-700"
-              >
-                ✕
-              </button>
-            </div>
+          <div className="bg-white rounded-lg p-6 w-full max-w-md mx-4 max-h-[90vh] overflow-y-auto">
+            <h3 className="text-lg font-semibold text-gray-900 mb-4">Add New Address</h3>
             
-            <div className="p-4 space-y-4">
+            <div className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Address Label (Optional)
+                  Label (Optional)
                 </label>
                 <input
                   type="text"
@@ -523,58 +570,111 @@ const CustomerProfile = ({ profile, onUpdate }) => {
                 />
               </div>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Address Line 1 *
-                </label>
-                <input
-                  type="text"
-                  name="address_line_1"
-                  value={newAddress.address_line_1}
-                  onChange={handleAddressChange}
-                  placeholder="Street address"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  required
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Address Line 2 (Optional)
-                </label>
-                <input
-                  type="text"
-                  name="address_line_2"
-                  value={newAddress.address_line_2}
-                  onChange={handleAddressChange}
-                  placeholder="Apartment, suite, etc."
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
+              {/* UPDATED: Receiver Information Section */}
+              <div className="border-t pt-4">
+                <h4 className="text-sm font-medium text-gray-900 mb-3">Receiver Information</h4>
+                
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    City *
+                    Receiver Name *
                   </label>
                   <input
                     type="text"
-                    name="city"
-                    value={newAddress.city}
+                    name="receiver_name"
+                    value={newAddress.receiver_name}
                     onChange={handleAddressChange}
+                    placeholder="Full name of person receiving the order"
                     className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                     required
                   />
                 </div>
 
+                <div className="mt-3">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Receiver Phone (Optional)
+                  </label>
+                  <input
+                    type="tel"
+                    name="receiver_phone"
+                    value={newAddress.receiver_phone}
+                    onChange={handleAddressChange}
+                    placeholder="Phone number for delivery contact"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  />
+                </div>
+              </div>
+
+              {/* Address Information Section */}
+              <div className="border-t pt-4">
+                <h4 className="text-sm font-medium text-gray-900 mb-3">Address Information</h4>
+                
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    State *
+                    Address Line 1 *
                   </label>
                   <input
                     type="text"
-                    name="state"
-                    value={newAddress.state}
+                    name="address_line_1"
+                    value={newAddress.address_line_1}
+                    onChange={handleAddressChange}
+                    placeholder="Street address"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    required
+                  />
+                </div>
+
+                <div className="mt-3">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Address Line 2 (Optional)
+                  </label>
+                  <input
+                    type="text"
+                    name="address_line_2"
+                    value={newAddress.address_line_2}
+                    onChange={handleAddressChange}
+                    placeholder="Apartment, suite, etc."
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-4 mt-3">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      City *
+                    </label>
+                    <input
+                      type="text"
+                      name="city"
+                      value={newAddress.city}
+                      onChange={handleAddressChange}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      required
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      State *
+                    </label>
+                    <input
+                      type="text"
+                      name="state"
+                      value={newAddress.state}
+                      onChange={handleAddressChange}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      required
+                    />
+                  </div>
+                </div>
+
+                <div className="mt-3">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    ZIP Code *
+                  </label>
+                  <input
+                    type="text"
+                    name="zip_code"
+                    value={newAddress.zip_code}
                     onChange={handleAddressChange}
                     className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                     required
@@ -582,21 +682,7 @@ const CustomerProfile = ({ profile, onUpdate }) => {
                 </div>
               </div>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  ZIP Code *
-                </label>
-                <input
-                  type="text"
-                  name="zip_code"
-                  value={newAddress.zip_code}
-                  onChange={handleAddressChange}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  required
-                />
-              </div>
-
-              <div className="flex items-center">
+              <div className="flex items-center pt-3 border-t">
                 <input
                   type="checkbox"
                   name="is_default"
