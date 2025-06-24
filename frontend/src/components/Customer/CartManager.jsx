@@ -180,12 +180,17 @@ const CartManager = ({ cart, restaurant, onUpdateItem, onRemoveItem, onClearCart
     }
   };
 
+  // In CartManager.jsx - Update createPaymentLink function
   const createPaymentLink = async () => {
     if (!orderData) return;
 
     setPaymentLoading(true);
     
     try {
+      // Save order data to localStorage
+      console.log('💾 Saving order data to localStorage...', orderData);
+      localStorage.setItem('pending_order', JSON.stringify(orderData));
+      
       const response = await paymentAPI.createPaymentLink(
         orderData.total,
         getCustomerPhone(),
@@ -197,6 +202,15 @@ const CartManager = ({ cart, restaurant, onUpdateItem, onRemoveItem, onClearCart
 
       if (response.success) {
         setPaymentLink(response);
+        
+        // ✅ SAVE PAYMENT LINK DATA FOR FALLBACK
+        localStorage.setItem('recent_payment_link', JSON.stringify({
+          cf_link_id: response.cf_link_id,
+          link_id: response.link_id,
+          created_at: new Date().toISOString()
+        }));
+        
+        console.log('✅ Payment link created:', response);
       } else {
         alert('Failed to create payment link: ' + response.error);
       }

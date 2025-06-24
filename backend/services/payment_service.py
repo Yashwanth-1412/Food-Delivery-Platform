@@ -37,7 +37,7 @@ class CashfreeService:
                     'customer_phone': customer_details['customer_phone']
                 },
                 'link_meta': {
-                    'return_url': 'http://localhost:3000/payment/success',  # Your frontend URL
+                    'return_url': 'http://localhost:5173/payment/success',  # Your frontend URL
                     'notify_url': 'http://localhost:5000/api/payment/webhook',  # Your webhook URL
                     'upi_intent': True
                 },

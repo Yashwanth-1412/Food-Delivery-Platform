@@ -285,11 +285,11 @@ def create_order():
     """Create a new order"""
     try:
         data = request.get_json()
-        current_user = auth.get_user(request.user_id)
+        current_user = get_current_user_id()
         
         # Create order
         result = customer_service.create_order(
-            customer_id=current_user.uid,
+            customer_id=current_user,
             order_data=data
         )
         
