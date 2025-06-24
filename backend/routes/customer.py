@@ -5,6 +5,7 @@ from middleware.auth import get_current_user_id, require_role
 from models.roles import UserRole
 from services.customer_service import customer_service
 from services.restaurant_service import restaurant_service
+from config.firebase import db
 
 customer_bp = Blueprint('customer', __name__, url_prefix='/api/customer')
 

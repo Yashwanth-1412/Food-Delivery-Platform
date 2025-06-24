@@ -135,5 +135,52 @@ class StorageService:
         except Exception as e:
             raise Exception(f"Error getting file info: {str(e)}")
 
+    # Add this to backend/services/storage_service.py
+
+    def upload_restaurant_logo(self, file, restaurant_id):
+        """Upload restaurant logo to local storage"""
+        try:
+            print(f"🔄 Uploading logo for restaurant: {restaurant_id}")
+            
+            # Create restaurant logos directory
+            os.makedirs(f'{self.upload_dir}/restaurant_logos', exist_ok=True)
+            
+            # Validate file
+            validation_result = validate_image_file(file, self.allowed_extensions, self.max_file_size)
+            if not validation_result['valid']:
+                raise ValueError(validation_result['error'])
+            
+            # Get file extension
+            if '.' in file.filename:
+                file_extension = file.filename.rsplit('.', 1)[1].lower()
+            else:
+                raise ValueError("File must have an extension")
+            
+            # Generate unique filename
+            filename = f"logo_{restaurant_id}_{uuid.uuid4()}.{file_extension}"
+            file_path = os.path.join(self.upload_dir, 'restaurant_logos', filename)
+            
+            print(f"💾 Saving logo to: {file_path}")
+            
+            # Save file locally
+            file.seek(0)  # Reset file pointer
+            file.save(file_path)
+            
+            # Verify file was saved
+            if os.path.exists(file_path):
+                file_size = os.path.getsize(file_path)
+                print(f"✅ Logo saved successfully: {file_size} bytes")
+            else:
+                raise Exception("Logo file was not saved properly")
+            
+            # Return local URL
+            logo_url = f"http://localhost:5000/static/uploads/restaurant_logos/{filename}"
+            print(f"🔗 Logo URL: {logo_url}")
+            return logo_url
+                
+        except Exception as e:
+            print(f"❌ Error uploading restaurant logo: {str(e)}")
+            raise Exception(f"Error uploading restaurant logo: {str(e)}")
+
 # Create a singleton instance
 storage_service = StorageService()

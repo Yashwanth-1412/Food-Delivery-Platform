@@ -780,5 +780,29 @@ class RestaurantService:
         except Exception as e:
             raise Exception(f"Error getting order stats: {str(e)}")
 
+
+    # Add this method to backend/services/restaurant_service.py
+
+    def upload_restaurant_logo(self, restaurant_id: str, file) -> str:
+        """Upload restaurant logo"""
+        try:
+            # Import storage service
+            from services.storage_service import storage_service
+            
+            # Upload the logo
+            logo_url = storage_service.upload_restaurant_logo(file, restaurant_id)
+            
+            # Update restaurant profile with logo URL
+            restaurant_ref = self.db.collection('restaurants').document(restaurant_id)
+            restaurant_ref.update({
+                'logo_url': logo_url,
+                'updated_at': datetime.utcnow()
+            })
+            
+            return logo_url
+            
+        except Exception as e:
+            raise Exception(f"Error uploading restaurant logo: {str(e)}")
+
 # Create a singleton instance
 restaurant_service = RestaurantService()

@@ -510,3 +510,40 @@ def get_menu_summary():
             'success': False,
             'error': str(e)
         }), 500
+
+
+# Add this to backend/routes/restaurants.py
+
+@restaurants_bp.route('/upload-logo', methods=['POST'])
+@require_restaurant_or_admin
+def upload_restaurant_logo():
+    """Upload restaurant logo"""
+    try:
+        uid = get_current_user_id()
+        
+        if 'logo' not in request.files:
+            return jsonify({
+                'success': False,
+                'error': 'No logo file provided'
+            }), 400
+        
+        file = request.files['logo']
+        
+        # Upload the logo and get the URL
+        logo_url = restaurant_service.upload_restaurant_logo(uid, file)
+        
+        return jsonify({
+            'success': True,
+            'message': 'Logo uploaded successfully',
+            'logo_url': logo_url
+        })
+    except ValueError as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 400
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500

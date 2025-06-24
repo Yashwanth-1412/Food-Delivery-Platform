@@ -1,57 +1,22 @@
-// frontend/src/services/restaurantApi.js
-import axios from 'axios';
-import { authService } from '../firebase/auth';
-
-const API_BASE_URL = 'http://localhost:5000/api';
-
-const restaurantApi = axios.create({
-  baseURL: API_BASE_URL,
-});
-
-// Add authentication token to requests
-restaurantApi.interceptors.request.use(async (config) => {
-  try {
-    const token = await authService.getCurrentUserToken();
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`;
-    }
-    
-    // Only set Content-Type for non-FormData requests
-    if (!(config.data instanceof FormData)) {
-      config.headers['Content-Type'] = 'application/json';
-    }
-  } catch (error) {
-    console.error('Error adding auth token:', error);
-  }
-  return config;
-});
-
-// Handle authentication errors
-restaurantApi.interceptors.response.use(
-  (response) => response,
-  (error) => {
-    if (error.response?.status === 401) {
-      console.log('Authentication error in restaurant API');
-    }
-    return Promise.reject(error);
-  }
-);
+// frontend/src/services/restaurantApi.js - COMPLETE VERSION
+import api from './api';
 
 export const restaurantService = {
   // ===== RESTAURANT PROFILE =====
-  getProfile: async () => {
+  
+  async getProfile() {
     try {
-      const response = await restaurantApi.get('/restaurants/profile');
+      const response = await api.get('/restaurants/profile');
       return response.data;
     } catch (error) {
-      console.error('Error fetching restaurant profile:', error);
+      console.error('Error getting restaurant profile:', error);
       throw error;
     }
   },
 
-  updateProfile: async (profileData) => {
+  async updateProfile(profileData) {
     try {
-      const response = await restaurantApi.put('/restaurants/profile', profileData);
+      const response = await api.put('/restaurants/profile', profileData);
       return response.data;
     } catch (error) {
       console.error('Error updating restaurant profile:', error);
@@ -59,20 +24,19 @@ export const restaurantService = {
     }
   },
 
-  // ===== RESTAURANT SETTINGS =====
-  getSettings: async () => {
+  async getSettings() {
     try {
-      const response = await restaurantApi.get('/restaurants/settings');
+      const response = await api.get('/restaurants/settings');
       return response.data;
     } catch (error) {
-      console.error('Error fetching restaurant settings:', error);
+      console.error('Error getting restaurant settings:', error);
       throw error;
     }
   },
 
-  updateSettings: async (settingsData) => {
+  async updateSettings(settingsData) {
     try {
-      const response = await restaurantApi.put('/restaurants/settings', settingsData);
+      const response = await api.put('/restaurants/settings', settingsData);
       return response.data;
     } catch (error) {
       console.error('Error updating restaurant settings:', error);
@@ -80,64 +44,93 @@ export const restaurantService = {
     }
   },
 
+  // ===== LOGO UPLOAD =====
+  
+  async uploadRestaurantLogo(logoFile) {
+    try {
+      const formData = new FormData();
+      formData.append('logo', logoFile);
+      
+      const response = await api.post('/restaurants/upload-logo', formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+      });
+      return response.data;
+    } catch (error) {
+      console.error('Error uploading restaurant logo:', error);
+      throw error;
+    }
+  },
+
   // ===== MENU CATEGORIES =====
-  getCategories: async () => {
+  
+  async getCategories() {
     try {
-      const response = await restaurantApi.get('/restaurants/categories');
+      const response = await api.get('/restaurants/categories');
       return response.data;
     } catch (error) {
-      console.error('Error fetching menu categories:', error);
+      console.error('Error getting categories:', error);
       throw error;
     }
   },
 
-  createCategory: async (categoryData) => {
+  async createCategory(categoryData) {
     try {
-      const response = await restaurantApi.post('/restaurants/categories', categoryData);
+      const response = await api.post('/restaurants/categories', categoryData);
       return response.data;
     } catch (error) {
-      console.error('Error creating menu category:', error);
+      console.error('Error creating category:', error);
       throw error;
     }
   },
 
-  updateCategory: async (categoryId, categoryData) => {
+  async updateCategory(categoryId, categoryData) {
     try {
-      const response = await restaurantApi.put(`/restaurants/categories/${categoryId}`, categoryData);
+      const response = await api.put(`/restaurants/categories/${categoryId}`, categoryData);
       return response.data;
     } catch (error) {
-      console.error('Error updating menu category:', error);
+      console.error('Error updating category:', error);
       throw error;
     }
   },
 
-  deleteCategory: async (categoryId) => {
+  async deleteCategory(categoryId) {
     try {
-      const response = await restaurantApi.delete(`/restaurants/categories/${categoryId}`);
+      const response = await api.delete(`/restaurants/categories/${categoryId}`);
       return response.data;
     } catch (error) {
-      console.error('Error deleting menu category:', error);
+      console.error('Error deleting category:', error);
+      throw error;
+    }
+  },
+
+  async toggleCategoryAvailability(categoryId) {
+    try {
+      const response = await api.put(`/restaurants/categories/${categoryId}/toggle`);
+      return response.data;
+    } catch (error) {
+      console.error('Error toggling category availability:', error);
       throw error;
     }
   },
 
   // ===== MENU ITEMS =====
-  getMenuItems: async (categoryId = null) => {
+  
+  async getMenuItems(categoryId = null) {
     try {
-      const url = categoryId 
-        ? `/restaurants/menu-items?category_id=${categoryId}`
-        : '/restaurants/menu-items';
-      const response = await restaurantApi.get(url);
+      const params = categoryId ? { category_id: categoryId } : {};
+      const response = await api.get('/restaurants/menu-items', { params });
       return response.data;
     } catch (error) {
-      console.error('Error fetching menu items:', error);
+      console.error('Error getting menu items:', error);
       throw error;
     }
   },
 
-  createMenuItem: async (itemData) => {
+  async createMenuItem(itemData) {
     try {
-      const response = await restaurantApi.post('/restaurants/menu-items', itemData);
+      const response = await api.post('/restaurants/menu-items', itemData);
       return response.data;
     } catch (error) {
       console.error('Error creating menu item:', error);
@@ -145,9 +138,9 @@ export const restaurantService = {
     }
   },
 
-  updateMenuItem: async (itemId, itemData) => {
+  async updateMenuItem(itemId, itemData) {
     try {
-      const response = await restaurantApi.put(`/restaurants/menu-items/${itemId}`, itemData);
+      const response = await api.put(`/restaurants/menu-items/${itemId}`, itemData);
       return response.data;
     } catch (error) {
       console.error('Error updating menu item:', error);
@@ -155,9 +148,9 @@ export const restaurantService = {
     }
   },
 
-  deleteMenuItem: async (itemId) => {
+  async deleteMenuItem(itemId) {
     try {
-      const response = await restaurantApi.delete(`/restaurants/menu-items/${itemId}`);
+      const response = await api.delete(`/restaurants/menu-items/${itemId}`);
       return response.data;
     } catch (error) {
       console.error('Error deleting menu item:', error);
@@ -165,9 +158,9 @@ export const restaurantService = {
     }
   },
 
-  toggleMenuItemAvailability: async (itemId) => {
+  async toggleMenuItemAvailability(itemId) {
     try {
-      const response = await restaurantApi.put(`/restaurants/menu-items/${itemId}/toggle`);
+      const response = await api.put(`/restaurants/menu-items/${itemId}/toggle`);
       return response.data;
     } catch (error) {
       console.error('Error toggling menu item availability:', error);
@@ -175,43 +168,42 @@ export const restaurantService = {
     }
   },
 
-  // ===== MENU ITEM IMAGE UPLOAD =====
-// ===== MENU ITEM IMAGE UPLOAD =====
-  uploadMenuItemImage: async (itemId, imageFile) => {
+  async uploadMenuItemImage(itemId, imageFile) {
     try {
       const formData = new FormData();
       formData.append('image', imageFile);
       
-      const response = await restaurantApi.post(
-        `/restaurants/menu/items/${itemId}/upload-image`,  // Fixed path
-        formData
-        // Remove headers - let the interceptor handle it properly
-      );
+      const response = await api.post(`/restaurants/menu/items/${itemId}/upload-image`, formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+      });
       return response.data;
     } catch (error) {
       console.error('Error uploading menu item image:', error);
       throw error;
     }
   },
-  // ===== ORDERS MANAGEMENT =====
-  getOrders: async (status = null, limit = 50) => {
+
+  // ===== ORDERS =====
+  
+  async getOrders(status = null, limit = 50) {
     try {
-      const params = new URLSearchParams();
-      if (status) params.append('status', status);
-      if (limit) params.append('limit', limit.toString());
+      const params = {};
+      if (status) params.status = status;
+      if (limit) params.limit = limit;
       
-      const url = `/restaurants/orders${params.toString() ? '?' + params.toString() : ''}`;
-      const response = await restaurantApi.get(url);
+      const response = await api.get('/restaurants/orders', { params });
       return response.data;
     } catch (error) {
-      console.error('Error fetching restaurant orders:', error);
+      console.error('Error getting orders:', error);
       throw error;
     }
   },
 
-  updateOrderStatus: async (orderId, status) => {
+  async updateOrderStatus(orderId, status) {
     try {
-      const response = await restaurantApi.put(`/restaurants/orders/${orderId}/status`, { status });
+      const response = await api.put(`/restaurants/orders/${orderId}/status`, { status });
       return response.data;
     } catch (error) {
       console.error('Error updating order status:', error);
@@ -219,23 +211,36 @@ export const restaurantService = {
     }
   },
 
-  // ===== ANALYTICS & REPORTING =====
-  getMenuSummary: async () => {
+  // ===== STATISTICS =====
+  
+  async getStats() {
     try {
-      const response = await restaurantApi.get('/restaurants/menu/summary');
+      const response = await api.get('/restaurants/stats');
       return response.data;
     } catch (error) {
-      console.error('Error fetching menu summary:', error);
+      console.error('Error getting restaurant stats:', error);
       throw error;
     }
   },
 
-  searchMenuItems: async (searchTerm) => {
+  async getAnalytics(period = 'week') {
     try {
-      const response = await restaurantApi.get(`/restaurants/menu-items/search?q=${encodeURIComponent(searchTerm)}`);
+      const response = await api.get('/restaurants/analytics', {
+        params: { period }
+      });
       return response.data;
     } catch (error) {
-      console.error('Error searching menu items:', error);
+      console.error('Error getting restaurant analytics:', error);
+      throw error;
+    }
+  },
+
+  async getMenuSummary() {
+    try {
+      const response = await api.get('/restaurants/menu/summary');
+      return response.data;
+    } catch (error) {
+      console.error('Error getting menu summary:', error);
       throw error;
     }
   }

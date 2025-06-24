@@ -14,7 +14,7 @@ class CustomerService:
         self.favorites_collection = 'customer_favorites'
 
     # ===== RESTAURANT DISCOVERY =====
-    
+        
     def get_available_restaurants(self, filters: Dict[str, Any] = None) -> List[Dict[str, Any]]:
         """Get list of available restaurants with optional filters"""
         try:
@@ -23,13 +23,10 @@ class CustomerService:
             # Start with base query
             query = restaurants_ref
             
-            # Apply filters
+            # Apply database-level filters
             if filters:
                 if filters.get('is_open') is not None:
                     query = query.where('is_open', '==', filters['is_open'])
-                
-                if filters.get('cuisine'):
-                    query = query.where('cuisine', '==', filters['cuisine'])
             
             restaurants = []
             for doc in query.stream():
@@ -41,11 +38,21 @@ class CustomerService:
                     # Search filter
                     if filters.get('search'):
                         search_term = filters['search'].lower()
-                        name_match = search_term in restaurant_data.get('name', '').lower()
-                        desc_match = search_term in restaurant_data.get('description', '').lower()
-                        cuisine_match = search_term in restaurant_data.get('cuisine', '').lower()
+                        name = restaurant_data.get('restaurant_name', restaurant_data.get('name', '')).lower()
+                        desc = restaurant_data.get('description', '').lower()
+                        cuisine = restaurant_data.get('cuisine_type', restaurant_data.get('cuisine', '')).lower()
+                        
+                        name_match = search_term in name
+                        desc_match = search_term in desc
+                        cuisine_match = search_term in cuisine
                         
                         if not (name_match or desc_match or cuisine_match):
+                            continue
+                    
+                    # Cuisine filter
+                    if filters.get('cuisine'):
+                        restaurant_cuisine = restaurant_data.get('cuisine_type', restaurant_data.get('cuisine', ''))
+                        if restaurant_cuisine.lower() != filters['cuisine'].lower():
                             continue
                     
                     # Rating filter
@@ -53,19 +60,37 @@ class CustomerService:
                         if restaurant_data.get('rating', 0) < filters['min_rating']:
                             continue
                 
-                # Ensure required fields exist
-                restaurant_data.setdefault('rating', 0.0)
-                restaurant_data.setdefault('delivery_time', '30-45 min')
-                restaurant_data.setdefault('delivery_fee', 2.99)
-                restaurant_data.setdefault('min_order', 15.00)
-                restaurant_data.setdefault('is_open', True)
+                # Format restaurant data for frontend consumption
+                formatted_restaurant = {
+                    'id': restaurant_data['id'],
+                    'name': restaurant_data.get('restaurant_name', restaurant_data.get('name', 'Unknown Restaurant')),
+                    'description': restaurant_data.get('description', 'Delicious food awaits you'),
+                    'cuisine': restaurant_data.get('cuisine_type', restaurant_data.get('cuisine', 'Various')),
+                    'rating': restaurant_data.get('rating', 4.0),
+                    'delivery_time': restaurant_data.get('estimated_delivery_time', restaurant_data.get('delivery_time', '30-45 min')),
+                    'delivery_fee': restaurant_data.get('delivery_fee', 2.99),
+                    'min_order': restaurant_data.get('min_order_amount', restaurant_data.get('min_order', 15.00)),
+                    'is_open': restaurant_data.get('is_open', True),
+                    'image_url': restaurant_data.get('logo_url', restaurant_data.get('image_url', '/api/placeholder/300/200')),
+                    'address': restaurant_data.get('address_line_1', restaurant_data.get('address', '')),
+                    'city': restaurant_data.get('city', ''),
+                    'state': restaurant_data.get('state', ''),
+                    'zip_code': restaurant_data.get('zip_code', ''),
+                    'phone': restaurant_data.get('phone', ''),
+                    'email': restaurant_data.get('email', ''),
+                    'website': restaurant_data.get('website', '')
+                }
                 
-                restaurants.append(restaurant_data)
+                restaurants.append(formatted_restaurant)
+            
+            # Sort restaurants by rating (highest first)
+            restaurants.sort(key=lambda x: x.get('rating', 0), reverse=True)
             
             return restaurants
         except Exception as e:
-            raise Exception(f"Error getting available restaurants: {str(e)}")
-    
+            print(f"Error getting available restaurants: {str(e)}")
+            raise Exception(f"Error getting available restaurants: {str(e)}")    
+        
     def get_restaurant_details(self, restaurant_id: str) -> Dict[str, Any]:
         """Get detailed information about a specific restaurant"""
         try:
@@ -78,8 +103,32 @@ class CustomerService:
             restaurant_data = doc.to_dict()
             restaurant_data['id'] = doc.id
             
-            return restaurant_data
+            # Format restaurant data consistently
+            formatted_restaurant = {
+                'id': restaurant_data['id'],
+                'name': restaurant_data.get('restaurant_name', restaurant_data.get('name', 'Unknown Restaurant')),
+                'description': restaurant_data.get('description', 'Delicious food awaits you'),
+                'cuisine': restaurant_data.get('cuisine_type', restaurant_data.get('cuisine', 'Various')),
+                'rating': restaurant_data.get('rating', 4.0),
+                'delivery_time': restaurant_data.get('estimated_delivery_time', restaurant_data.get('delivery_time', '30-45 min')),
+                'delivery_fee': restaurant_data.get('delivery_fee', 2.99),
+                'min_order': restaurant_data.get('min_order_amount', restaurant_data.get('min_order', 15.00)),
+                'is_open': restaurant_data.get('is_open', True),
+                'image_url': restaurant_data.get('logo_url', restaurant_data.get('image_url', '/api/placeholder/300/200')),
+                'address': restaurant_data.get('address_line_1', restaurant_data.get('address', '')),
+                'city': restaurant_data.get('city', ''),
+                'state': restaurant_data.get('state', ''),
+                'zip_code': restaurant_data.get('zip_code', ''),
+                'phone': restaurant_data.get('phone', ''),
+                'email': restaurant_data.get('email', ''),
+                'website': restaurant_data.get('website', ''),
+                # Full address
+                'full_address': f"{restaurant_data.get('address_line_1', '')} {restaurant_data.get('city', '')} {restaurant_data.get('state', '')} {restaurant_data.get('zip_code', '')}".strip()
+            }
+            
+            return formatted_restaurant
         except Exception as e:
+            print(f"Error getting restaurant details: {str(e)}")
             raise Exception(f"Error getting restaurant details: {str(e)}")
     
     def get_restaurant_menu(self, restaurant_id: str) -> Dict[str, Any]:
@@ -518,16 +567,19 @@ class CustomerService:
     def get_cuisine_types(self) -> List[str]:
         """Get available cuisine types"""
         try:
-            restaurants = self.get_available_restaurants()
+            restaurants_ref = self.db.collection(self.restaurants_collection)
             cuisines = set()
             
-            for restaurant in restaurants:
-                cuisine = restaurant.get('cuisine')
+            for doc in restaurants_ref.stream():
+                restaurant_data = doc.to_dict()
+                # Check both possible field names
+                cuisine = restaurant_data.get('cuisine_type') or restaurant_data.get('cuisine')
                 if cuisine:
                     cuisines.add(cuisine)
             
             return sorted(list(cuisines))
         except Exception as e:
+            print(f"Error getting cuisine types: {str(e)}")
             raise Exception(f"Error getting cuisine types: {str(e)}")
 
 
