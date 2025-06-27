@@ -1,9 +1,9 @@
-// frontend/src/components/Customer/CartManager.jsx - Updated with Payment Links
+// frontend/src/components/Customer/CartManager.jsx
 import React, { useState, useEffect } from 'react';
 import { customerService } from '../../services/customerApi';
 import { paymentAPI } from '../../services/paymentApi';
 
-const CartManager = ({ cart, restaurant, onUpdateItem, onRemoveItem, onClearCart }) => {
+const CartManager = ({ cart, restaurant, onUpdateItem, onRemoveItem, onClearCart, total, isModal = false }) => {
   const [isCheckingOut, setIsCheckingOut] = useState(false);
   const [showCheckoutForm, setShowCheckoutForm] = useState(false);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
@@ -17,6 +17,7 @@ const CartManager = ({ cart, restaurant, onUpdateItem, onRemoveItem, onClearCart
   const [paymentLoading, setPaymentLoading] = useState(false);
   const [checkingPayment, setCheckingPayment] = useState(false);
   const [orderData, setOrderData] = useState(null);
+  const [orderStatus, setOrderStatus] = useState(null);
   const [newAddress, setNewAddress] = useState({
     label: '',
     receiver_name: '',
@@ -81,15 +82,11 @@ const CartManager = ({ cart, restaurant, onUpdateItem, onRemoveItem, onClearCart
     }
   };
 
-  const handleQuantityChange = (itemId, change) => {
-    const currentItem = cart.find(item => item.id === itemId);
-    if (currentItem) {
-      const newQuantity = currentItem.quantity + change;
-      if (newQuantity > 0) {
-        onUpdateItem(itemId, newQuantity);
-      } else {
-        onRemoveItem(itemId);
-      }
+  const handleQuantityChange = (itemId, newQuantity) => {
+    if (newQuantity <= 0) {
+      onRemoveItem(itemId);
+    } else {
+      onUpdateItem(itemId, newQuantity);
     }
   };
 
@@ -98,11 +95,11 @@ const CartManager = ({ cart, restaurant, onUpdateItem, onRemoveItem, onClearCart
   };
 
   const calculateDeliveryFee = () => {
-    return restaurant?.delivery_fee || 0;
+    return restaurant?.delivery_fee || 2.99;
   };
 
   const calculateTax = () => {
-    return calculateSubtotal() * 0.18; // 18% GST for India
+    return calculateSubtotal() * 0.18; // 18% GST
   };
 
   const calculateTotal = () => {
@@ -124,7 +121,7 @@ const CartManager = ({ cart, restaurant, onUpdateItem, onRemoveItem, onClearCart
     }
 
     if (calculateSubtotal() < (restaurant?.min_order || 0)) {
-      alert(`Minimum order amount is ₹${restaurant?.min_order?.toFixed(2) || '0.00'}`);
+      alert(`Minimum order amount is $${restaurant?.min_order?.toFixed(2) || '0.00'}`);
       return;
     }
 
@@ -157,10 +154,14 @@ const CartManager = ({ cart, restaurant, onUpdateItem, onRemoveItem, onClearCart
         });
         
         if (response.success) {
-          alert('Order placed successfully! 🎉 You can pay cash on delivery.');
+          setOrderStatus('success');
           onClearCart();
           setShowCheckoutForm(false);
           setSpecialInstructions('');
+          
+          setTimeout(() => {
+            setOrderStatus(null);
+          }, 3000);
         } else {
           throw new Error(response.error || 'Failed to place order');
         }
@@ -174,13 +175,16 @@ const CartManager = ({ cart, restaurant, onUpdateItem, onRemoveItem, onClearCart
 
     } catch (error) {
       console.error('Checkout failed:', error);
-      alert('Failed to process checkout. Please try again.');
+      setOrderStatus('error');
+      
+      setTimeout(() => {
+        setOrderStatus(null);
+      }, 3000);
     } finally {
       setIsCheckingOut(false);
     }
   };
 
-  // In CartManager.jsx - Update createPaymentLink function
   const createPaymentLink = async () => {
     if (!orderData) return;
 
@@ -203,7 +207,7 @@ const CartManager = ({ cart, restaurant, onUpdateItem, onRemoveItem, onClearCart
       if (response.success) {
         setPaymentLink(response);
         
-        // ✅ SAVE PAYMENT LINK DATA FOR FALLBACK
+        // Save payment link data for fallback
         localStorage.setItem('recent_payment_link', JSON.stringify({
           cf_link_id: response.cf_link_id,
           link_id: response.link_id,
@@ -271,11 +275,15 @@ const CartManager = ({ cart, restaurant, onUpdateItem, onRemoveItem, onClearCart
       
       if (response.success) {
         setShowPaymentModal(false);
-        alert('Payment successful! 🎉 Your order has been confirmed.');
+        setOrderStatus('success');
         onClearCart();
         setSpecialInstructions('');
         setOrderData(null);
         setPaymentLink(null);
+        
+        setTimeout(() => {
+          setOrderStatus(null);
+        }, 3000);
       } else {
         alert('Order creation failed after payment. Please contact support.');
       }
@@ -308,568 +316,754 @@ const CartManager = ({ cart, restaurant, onUpdateItem, onRemoveItem, onClearCart
     }
   };
 
+  // Success/Error Status Display
+  if (orderStatus === 'success') {
+    return (
+      <div className="p-8 text-center">
+        <div className="w-20 h-20 bg-gradient-to-r from-green-500 to-emerald-500 rounded-full flex items-center justify-center mx-auto mb-6 shadow-lg">
+          <span className="text-3xl text-white">✓</span>
+        </div>
+        <h3 className="text-2xl font-bold text-gray-800 mb-3">Order Placed Successfully!</h3>
+        <p className="text-gray-600 mb-4">Your delicious meal is on its way</p>
+        <div className="bg-green-50 border border-green-200 rounded-2xl p-4">
+          <p className="text-green-700 font-medium">
+            Order total: ${calculateTotal().toFixed(2)}
+          </p>
+          <p className="text-green-600 text-sm">
+            Estimated delivery: {restaurant?.delivery_time || '30-45 min'}
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  if (orderStatus === 'error') {
+    return (
+      <div className="p-8 text-center">
+        <div className="w-20 h-20 bg-gradient-to-r from-red-500 to-pink-500 rounded-full flex items-center justify-center mx-auto mb-6 shadow-lg">
+          <span className="text-3xl text-white">✕</span>
+        </div>
+        <h3 className="text-2xl font-bold text-gray-800 mb-3">Order Failed</h3>
+        <p className="text-gray-600 mb-4">Something went wrong. Please try again.</p>
+        <button
+          onClick={() => setOrderStatus(null)}
+          className="px-6 py-3 bg-gradient-to-r from-orange-500 to-red-500 text-white rounded-2xl hover:shadow-lg transition-all duration-300 font-semibold"
+        >
+          Try Again
+        </button>
+      </div>
+    );
+  }
+
   if (cart.length === 0) {
     return (
-      <div className="bg-white rounded-lg shadow-sm border p-6 text-center">
-        <span className="text-6xl mb-4 block">🛒</span>
-        <h3 className="text-lg font-medium text-gray-900 mb-2">Your cart is empty</h3>
-        <p className="text-gray-500">Add some delicious items to get started!</p>
+      <div className="p-8 text-center">
+        <div className="w-20 h-20 bg-gradient-to-r from-gray-100 to-gray-200 rounded-full flex items-center justify-center mx-auto mb-6">
+          <span className="text-3xl text-gray-400">🛒</span>
+        </div>
+        <h3 className="text-xl font-bold text-gray-800 mb-2">Your cart is empty</h3>
+        <p className="text-gray-600">Add some delicious items to get started</p>
       </div>
     );
   }
 
   return (
-    <div className="bg-white rounded-lg shadow-sm border">
-      {/* Cart Header */}
-      <div className="p-4 border-b">
-        <div className="flex items-center justify-between">
-          <h3 className="text-lg font-semibold text-gray-900">Your Order</h3>
-          <button
-            onClick={onClearCart}
-            className="text-sm text-red-600 hover:text-red-700"
-          >
-            Clear Cart
-          </button>
-        </div>
-        {restaurant && (
-          <p className="text-sm text-gray-600 mt-1">From {restaurant.name}</p>
-        )}
+    <div className={`${isModal ? 'p-6' : 'p-6'}`}>
+      {/* Cart Items */}
+      <div className="space-y-4 mb-6">
+        {cart.map((item) => (
+          <CartItem
+            key={item.id}
+            item={item}
+            onQuantityChange={handleQuantityChange}
+            onRemove={onRemoveItem}
+          />
+        ))}
       </div>
 
-      {/* Cart Items */}
-      <div className="p-4 max-h-64 overflow-y-auto">
-        <div className="space-y-3">
-          {cart.map(item => (
-            <div key={item.id} className="flex items-center justify-between">
-              <div className="flex-1">
-                <h4 className="font-medium text-gray-900">{item.name}</h4>
-                <p className="text-sm text-gray-600">₹{item.price.toFixed(2)} each</p>
-              </div>
-              
-              <div className="flex items-center space-x-2">
-                <button
-                  onClick={() => handleQuantityChange(item.id, -1)}
-                  className="w-8 h-8 rounded-full border border-gray-300 flex items-center justify-center hover:bg-gray-50"
-                >
-                  -
-                </button>
-                <span className="w-8 text-center font-medium">{item.quantity}</span>
-                <button
-                  onClick={() => handleQuantityChange(item.id, 1)}
-                  className="w-8 h-8 rounded-full border border-gray-300 flex items-center justify-center hover:bg-gray-50"
-                >
-                  +
-                </button>
-                <button
-                  onClick={() => onRemoveItem(item.id)}
-                  className="ml-2 text-red-600 hover:text-red-700"
-                >
-                  🗑️
-                </button>
+      {/* Cart Summary */}
+      <div className="border-t border-gray-200 pt-6">
+        <div className="bg-gradient-to-r from-gray-50 to-orange-50 rounded-2xl p-6">
+          <h3 className="text-lg font-bold text-gray-800 mb-4 flex items-center">
+            <span className="mr-2">📊</span>
+            Order Summary
+          </h3>
+          
+          <div className="space-y-3">
+            <div className="flex justify-between items-center">
+              <span className="text-gray-600">Subtotal ({cart.length} items)</span>
+              <span className="font-medium text-gray-800">${calculateSubtotal().toFixed(2)}</span>
+            </div>
+            
+            <div className="flex justify-between items-center">
+              <span className="text-gray-600">Delivery Fee</span>
+              <span className="font-medium text-gray-800">${calculateDeliveryFee().toFixed(2)}</span>
+            </div>
+            
+            <div className="flex justify-between items-center">
+              <span className="text-gray-600">Tax (18%)</span>
+              <span className="font-medium text-gray-800">${calculateTax().toFixed(2)}</span>
+            </div>
+            
+            <div className="border-t border-gray-200 pt-3">
+              <div className="flex justify-between items-center">
+                <span className="text-lg font-bold text-gray-800">Total</span>
+                <span className="text-2xl font-bold text-orange-600">${calculateTotal().toFixed(2)}</span>
               </div>
             </div>
-          ))}
+          </div>
         </div>
       </div>
 
-      {/* Order Summary */}
-      <div className="p-4 border-t bg-gray-50">
-        <div className="space-y-2 text-sm">
-          <div className="flex justify-between">
-            <span>Subtotal</span>
-            <span>₹{calculateSubtotal().toFixed(2)}</span>
-          </div>
-          <div className="flex justify-between">
-            <span>Delivery Fee</span>
-            <span>₹{calculateDeliveryFee().toFixed(2)}</span>
-          </div>
-          <div className="flex justify-between">
-            <span>GST (18%)</span>
-            <span>₹{calculateTax().toFixed(2)}</span>
-          </div>
-          <div className="flex justify-between font-semibold text-base pt-2 border-t">
-            <span>Total</span>
-            <span>₹{calculateTotal().toFixed(2)}</span>
+      {/* Minimum Order Check */}
+      {restaurant?.min_order && calculateSubtotal() < restaurant.min_order && (
+        <div className="mt-4 p-4 bg-yellow-50 border border-yellow-200 rounded-2xl">
+          <div className="flex items-center space-x-2 text-yellow-800">
+            <span>⚠️</span>
+            <div>
+              <p className="font-medium">Minimum order: ${restaurant.min_order.toFixed(2)}</p>
+              <p className="text-sm">Add ${(restaurant.min_order - calculateSubtotal()).toFixed(2)} more to checkout</p>
+            </div>
           </div>
         </div>
+      )}
 
-        {/* Minimum Order Check */}
-        {restaurant?.min_order && calculateSubtotal() < restaurant.min_order && (
-          <div className="mt-3 p-2 bg-yellow-50 border border-yellow-200 rounded text-sm text-yellow-800">
-            Minimum order: ₹{restaurant.min_order.toFixed(2)}. 
-            Add ₹{(restaurant.min_order - calculateSubtotal()).toFixed(2)} more.
-          </div>
-        )}
-
-        {/* Checkout Button */}
+      {/* Action Buttons */}
+      <div className="mt-6 space-y-3">
         <button
           onClick={() => setShowCheckoutForm(true)}
           disabled={!restaurant?.is_open || (restaurant?.min_order && calculateSubtotal() < restaurant.min_order)}
-          className={`w-full mt-4 py-3 rounded-md font-medium transition-colors ${
+          className={`w-full py-4 rounded-2xl font-bold text-lg transition-all duration-300 ${
             !restaurant?.is_open || (restaurant?.min_order && calculateSubtotal() < restaurant.min_order)
-              ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-              : 'bg-blue-600 hover:bg-blue-700 text-white'
+              ? 'bg-gray-200 text-gray-500 cursor-not-allowed'
+              : 'bg-gradient-to-r from-orange-500 to-red-500 text-white hover:shadow-xl hover:scale-102'
           }`}
         >
           {!restaurant?.is_open 
             ? 'Restaurant Closed' 
             : (restaurant?.min_order && calculateSubtotal() < restaurant.min_order)
               ? 'Minimum Order Not Met'
-              : 'Proceed to Checkout'}
+              : `Checkout • ${restaurant?.delivery_time || '30-45 min'}`}
+        </button>
+
+        <button
+          onClick={onClearCart}
+          className="w-full py-3 bg-gray-100 text-gray-700 rounded-2xl hover:bg-gray-200 transition-colors font-medium"
+        >
+          Clear Cart
         </button>
       </div>
 
+      {/* Restaurant Info */}
+      {restaurant && (
+        <div className="mt-6 p-4 bg-white rounded-2xl border border-gray-100">
+          <div className="flex items-center space-x-3">
+            <div className="w-12 h-12 bg-gradient-to-r from-orange-500 to-red-500 rounded-xl flex items-center justify-center">
+              <span className="text-white text-lg">🏪</span>
+            </div>
+            <div>
+              <h4 className="font-bold text-gray-800">{restaurant.name}</h4>
+              <p className="text-sm text-gray-600">{restaurant.cuisine} • {restaurant.delivery_time}</p>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Checkout Modal */}
       {showCheckoutForm && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-lg max-w-md w-full max-h-[80vh] overflow-y-auto">
-            <div className="p-4 border-b flex justify-between items-center">
-              <h3 className="text-lg font-semibold">Checkout</h3>
+        <CheckoutModal
+          restaurant={restaurant}
+          cart={cart}
+          addresses={addresses}
+          selectedAddress={selectedAddress}
+          setSelectedAddress={setSelectedAddress}
+          addressLoading={addressLoading}
+          showAddAddress={showAddAddress}
+          setShowAddAddress={setShowAddAddress}
+          newAddress={newAddress}
+          setNewAddress={setNewAddress}
+          handleAddAddress={handleAddAddress}
+          paymentMethod={paymentMethod}
+          setPaymentMethod={setPaymentMethod}
+          specialInstructions={specialInstructions}
+          setSpecialInstructions={setSpecialInstructions}
+          calculateTotal={calculateTotal}
+          handleCheckout={handleCheckout}
+          isCheckingOut={isCheckingOut}
+          onClose={() => setShowCheckoutForm(false)}
+        />
+      )}
+
+      {/* Payment Modal */}
+      {showPaymentModal && (
+        <PaymentModal
+          restaurant={restaurant}
+          paymentLink={paymentLink}
+          paymentLoading={paymentLoading}
+          checkingPayment={checkingPayment}
+          createPaymentLink={createPaymentLink}
+          handleOpenPaymentLink={handleOpenPaymentLink}
+          copyLinkToClipboard={copyLinkToClipboard}
+          downloadQRCode={downloadQRCode}
+          onClose={() => setShowPaymentModal(false)}
+        />
+      )}
+    </div>
+  );
+};
+
+// Cart Item Component
+const CartItem = ({ item, onQuantityChange, onRemove }) => {
+  return (
+    <div className="bg-white rounded-2xl border border-gray-100 p-4 hover:shadow-md transition-all duration-200">
+      <div className="flex items-start space-x-4">
+        {/* Item Image */}
+        <div className="w-16 h-16 bg-gradient-to-br from-orange-100 to-red-100 rounded-xl flex items-center justify-center flex-shrink-0">
+          {item.image_url ? (
+            <img
+              src={item.image_url}
+              alt={item.name}
+              className="w-full h-full object-cover rounded-xl"
+            />
+          ) : (
+            <span className="text-2xl">🍽️</span>
+          )}
+        </div>
+
+        {/* Item Details */}
+        <div className="flex-1 min-w-0">
+          <div className="flex justify-between items-start mb-2">
+            <h4 className="font-semibold text-gray-800 truncate">{item.name}</h4>
+            <button
+              onClick={() => onRemove(item.id)}
+              className="w-8 h-8 flex items-center justify-center text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors flex-shrink-0 ml-2"
+            >
+              ✕
+            </button>
+          </div>
+          
+          {item.description && (
+            <p className="text-sm text-gray-600 mb-3 line-clamp-2">
+              {item.description}
+            </p>
+          )}
+
+          <div className="flex items-center justify-between">
+            {/* Quantity Controls */}
+            <div className="flex items-center bg-gray-50 rounded-xl border border-gray-200">
               <button
-                onClick={() => setShowCheckoutForm(false)}
-                className="text-gray-500 hover:text-gray-700"
+                onClick={() => onQuantityChange(item.id, item.quantity - 1)}
+                className="w-8 h-8 flex items-center justify-center text-gray-600 hover:text-orange-600 hover:bg-orange-50 rounded-l-xl transition-colors"
               >
-                ✕
+                −
+              </button>
+              <span className="w-10 h-8 flex items-center justify-center font-medium text-gray-800 text-sm">
+                {item.quantity}
+              </span>
+              <button
+                onClick={() => onQuantityChange(item.id, item.quantity + 1)}
+                className="w-8 h-8 flex items-center justify-center text-gray-600 hover:text-orange-600 hover:bg-orange-50 rounded-r-xl transition-colors"
+              >
+                +
               </button>
             </div>
-            
-            <div className="p-4 space-y-4">
-              {/* Order Summary */}
-              <div className="bg-gray-50 p-3 rounded-lg">
-                <h4 className="font-medium text-gray-900 mb-2">Order Summary</h4>
-                <div className="space-y-1 text-sm">
-                  {cart.map(item => (
-                    <div key={item.id} className="flex justify-between">
-                      <span>{item.quantity}x {item.name}</span>
-                      <span>₹{(item.price * item.quantity).toFixed(2)}</span>
-                    </div>
-                  ))}
-                  <div className="border-t pt-1 mt-2 font-medium">
-                    <div className="flex justify-between">
-                      <span>Total</span>
-                      <span>₹{calculateTotal().toFixed(2)}</span>
-                    </div>
-                  </div>
+
+            {/* Price */}
+            <div className="text-right">
+              <div className="font-bold text-gray-800">${(item.price * item.quantity).toFixed(2)}</div>
+              <div className="text-sm text-gray-500">${item.price} each</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// Checkout Modal Component
+const CheckoutModal = ({ 
+  restaurant, cart, addresses, selectedAddress, setSelectedAddress, 
+  addressLoading, showAddAddress, setShowAddAddress, newAddress, setNewAddress, 
+  handleAddAddress, paymentMethod, setPaymentMethod, specialInstructions, 
+  setSpecialInstructions, calculateTotal, handleCheckout, isCheckingOut, onClose 
+}) => {
+  return (
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+      <div className="bg-white rounded-3xl max-w-lg w-full max-h-[90vh] overflow-hidden shadow-2xl">
+        {/* Header */}
+        <div className="p-8 border-b border-gray-100">
+          <div className="flex justify-between items-center">
+            <div>
+              <h2 className="text-2xl font-bold text-gray-800">Checkout</h2>
+              <p className="text-gray-600">Complete your order</p>
+            </div>
+            <button
+              onClick={onClose}
+              className="w-10 h-10 bg-gray-100 hover:bg-gray-200 rounded-2xl flex items-center justify-center text-gray-600 transition-colors"
+            >
+              ✕
+            </button>
+          </div>
+        </div>
+
+        {/* Content */}
+        <div className="p-8 overflow-y-auto max-h-[70vh] space-y-6">
+          {/* Order Summary */}
+          <div className="bg-gradient-to-r from-gray-50 to-orange-50 rounded-2xl p-6">
+            <h3 className="font-bold text-gray-800 mb-4">Order Summary</h3>
+            <div className="space-y-2">
+              {cart.map(item => (
+                <div key={item.id} className="flex justify-between text-sm">
+                  <span>{item.quantity}x {item.name}</span>
+                  <span>${(item.price * item.quantity).toFixed(2)}</span>
+                </div>
+              ))}
+              <div className="border-t border-gray-200 pt-2 mt-2 font-bold">
+                <div className="flex justify-between">
+                  <span>Total</span>
+                  <span className="text-orange-600">${calculateTotal().toFixed(2)}</span>
                 </div>
               </div>
+            </div>
+          </div>
 
-              {/* Delivery Address Selection */}
-              <div>
-                <div className="flex justify-between items-center mb-2">
-                  <label className="block text-sm font-medium text-gray-700">
-                    Delivery Address *
-                  </label>
-                  <button
-                    onClick={() => setShowAddAddress(true)}
-                    className="text-sm text-blue-600 hover:text-blue-700 font-medium"
-                  >
-                    + Add New
-                  </button>
-                </div>
+          {/* Delivery Address */}
+          <div>
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="font-bold text-gray-800">Delivery Address</h3>
+              <button
+                onClick={() => setShowAddAddress(true)}
+                className="text-orange-600 hover:text-orange-700 font-medium text-sm"
+              >
+                + Add New
+              </button>
+            </div>
 
-                {addressLoading ? (
-                  <div className="text-center py-4">
-                    <div className="animate-spin h-4 w-4 border-2 border-blue-500 border-t-transparent rounded-full mx-auto mb-2"></div>
-                    <p className="text-sm text-gray-500">Loading addresses...</p>
-                  </div>
-                ) : addresses.length === 0 ? (
-                  <div className="text-center py-4 border-2 border-dashed border-gray-300 rounded-lg">
-                    <span className="text-2xl mb-2 block">📍</span>
-                    <p className="text-sm text-gray-500 mb-2">No saved addresses</p>
-                    <button
-                      onClick={() => setShowAddAddress(true)}
-                      className="text-sm bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded"
-                    >
-                      Add Your First Address
-                    </button>
-                  </div>
-                ) : (
-                  <div className="space-y-2 max-h-32 overflow-y-auto">
-                    {addresses.map((address) => (
-                      <div
-                        key={address.id}
-                        className={`border rounded-lg p-3 cursor-pointer text-sm ${
-                          selectedAddress === address.id
-                            ? 'border-blue-500 bg-blue-50'
-                            : 'border-gray-200 hover:border-gray-300'
-                        }`}
-                        onClick={() => setSelectedAddress(address.id)}
-                      >
-                        <div className="flex items-center justify-between">
-                          <div>
-                            <div className="flex items-center gap-2 mb-1">
-                              <input
-                                type="radio"
-                                checked={selectedAddress === address.id}
-                                onChange={() => setSelectedAddress(address.id)}
-                                className="text-blue-600"
-                              />
-                              <span className="font-medium">
-                                {address.label || 'Address'}
-                              </span>
-                              {address.is_default && (
-                                <span className="bg-green-100 text-green-800 text-xs px-1 py-0.5 rounded">
-                                  Default
-                                </span>
-                              )}
-                            </div>
-                            <p className="text-gray-600 ml-5">
-                              {address.receiver_name && (
-                                <span className="text-gray-800 font-medium">
-                                  👤 {address.receiver_name}
-                                  {address.receiver_phone && ` 📞 ${address.receiver_phone}`}
-                                  <br />
-                                </span>
-                              )}
-                              📍 {address.address_line_1}
-                              {address.address_line_2 && <>, {address.address_line_2}</>}
-                              <br />
-                              {address.city}, {address.state} {address.zip_code}
-                            </p>
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
+            {addressLoading ? (
+              <div className="text-center py-8">
+                <div className="animate-spin h-6 w-6 border-2 border-orange-500 border-t-transparent rounded-full mx-auto mb-2"></div>
+                <p className="text-sm text-gray-500">Loading addresses...</p>
               </div>
-
-              {/* Payment Method */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Payment Method
-                </label>
-                <div className="space-y-2">
-                  <label className="flex items-center">
-                    <input
-                      type="radio"
-                      name="paymentMethod"
-                      value="upi"
-                      checked={paymentMethod === 'upi'}
-                      onChange={(e) => setPaymentMethod(e.target.value)}
-                      className="h-4 w-4 text-blue-600"
-                    />
-                    <span className="ml-2 text-sm">💳 UPI Payment (GPay, PhonePe, etc.)</span>
-                  </label>
-                  <label className="flex items-center">
-                    <input
-                      type="radio"
-                      name="paymentMethod"
-                      value="card"
-                      checked={paymentMethod === 'card'}
-                      onChange={(e) => setPaymentMethod(e.target.value)}
-                      className="h-4 w-4 text-blue-600"
-                    />
-                    <span className="ml-2 text-sm">💳 Credit/Debit Card</span>
-                  </label>
-                  <label className="flex items-center">
-                    <input
-                      type="radio"
-                      name="paymentMethod"
-                      value="netbanking"
-                      checked={paymentMethod === 'netbanking'}
-                      onChange={(e) => setPaymentMethod(e.target.value)}
-                      className="h-4 w-4 text-blue-600"
-                    />
-                    <span className="ml-2 text-sm">🏦 Net Banking</span>
-                  </label>
-                  <label className="flex items-center">
-                    <input
-                      type="radio"
-                      name="paymentMethod"
-                      value="wallet"
-                      checked={paymentMethod === 'wallet'}
-                      onChange={(e) => setPaymentMethod(e.target.value)}
-                      className="h-4 w-4 text-blue-600"
-                    />
-                    <span className="ml-2 text-sm">👛 Digital Wallet</span>
-                  </label>
-                  <label className="flex items-center">
-                    <input
-                      type="radio"
-                      name="paymentMethod"
-                      value="cash"
-                      checked={paymentMethod === 'cash'}
-                      onChange={(e) => setPaymentMethod(e.target.value)}
-                      className="h-4 w-4 text-blue-600"
-                    />
-                    <span className="ml-2 text-sm">💵 Cash on Delivery</span>
-                  </label>
-                </div>
-              </div>
-
-              {/* Special Instructions */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Special Instructions (Optional)
-                </label>
-                <textarea
-                  value={specialInstructions}
-                  onChange={(e) => setSpecialInstructions(e.target.value)}
-                  placeholder="Any special requests for your order..."
-                  rows={2}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                />
-              </div>
-
-              {/* Estimated Delivery Time */}
-              <div className="bg-blue-50 p-3 rounded-lg">
-                <div className="flex items-center text-blue-800">
-                  <span className="mr-2">🕒</span>
-                  <span className="text-sm">
-                    Estimated delivery: {restaurant?.delivery_time || '30-45 min'}
-                  </span>
-                </div>
-              </div>
-
-              {/* Action Buttons */}
-              <div className="flex space-x-3 pt-4">
+            ) : addresses.length === 0 ? (
+              <div className="text-center py-8 border-2 border-dashed border-gray-300 rounded-2xl">
+                <span className="text-3xl mb-2 block">📍</span>
+                <p className="text-gray-500 mb-4">No saved addresses</p>
                 <button
-                  onClick={() => setShowCheckoutForm(false)}
-                  className="flex-1 py-2 px-4 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50 transition-colors"
+                  onClick={() => setShowAddAddress(true)}
+                  className="px-6 py-3 bg-gradient-to-r from-orange-500 to-red-500 text-white rounded-2xl hover:shadow-lg transition-all duration-300 font-medium"
                 >
-                  Back to Cart
+                  Add Your First Address
                 </button>
+              </div>
+            ) : (
+              <div className="space-y-3 max-h-40 overflow-y-auto">
+                {addresses.map((address) => (
+                  <div
+                    key={address.id}
+                    className={`border-2 rounded-2xl p-4 cursor-pointer transition-all duration-200 ${
+                      selectedAddress === address.id
+                        ? 'border-orange-500 bg-orange-50'
+                        : 'border-gray-200 hover:border-orange-300'
+                    }`}
+                    onClick={() => setSelectedAddress(address.id)}
+                  >
+                    <div className="flex items-start space-x-3">
+                      <input
+                        type="radio"
+                        checked={selectedAddress === address.id}
+                        onChange={() => setSelectedAddress(address.id)}
+                        className="mt-1 text-orange-600"
+                      />
+                      <div className="flex-1">
+                        <div className="flex items-center space-x-2 mb-1">
+                          <span className="font-semibold text-gray-800">
+                            {address.label || 'Address'}
+                          </span>
+                          {address.is_default && (
+                            <span className="bg-green-100 text-green-700 text-xs px-2 py-1 rounded-full">
+                              Default
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-sm text-gray-600">
+                          {address.receiver_name && (
+                            <span className="text-gray-800 font-medium">
+                              👤 {address.receiver_name}
+                              {address.receiver_phone && ` 📞 ${address.receiver_phone}`}
+                              <br />
+                            </span>
+                          )}
+                          📍 {address.address_line_1}
+                          {address.address_line_2 && <>, {address.address_line_2}</>}
+                          <br />
+                          {address.city}, {address.state} {address.zip_code}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Payment Method */}
+          <div>
+            <h3 className="font-bold text-gray-800 mb-4">Payment Method</h3>
+            <div className="grid grid-cols-1 gap-3">
+              {[
+                { value: 'upi', label: 'UPI Payment', icon: '💳', desc: 'GPay, PhonePe, etc.' },
+                { value: 'card', label: 'Credit/Debit Card', icon: '💳', desc: 'Visa, Mastercard, etc.' },
+                { value: 'netbanking', label: 'Net Banking', icon: '🏦', desc: 'Internet Banking' },
+                { value: 'wallet', label: 'Digital Wallet', icon: '👛', desc: 'Paytm, Amazon Pay, etc.' },
+                { value: 'cash', label: 'Cash on Delivery', icon: '💵', desc: 'Pay when delivered' }
+              ].map(method => (
                 <button
-                  onClick={handleCheckout}
-                  disabled={isCheckingOut || !selectedAddress}
-                  className={`flex-1 py-2 px-4 rounded-md font-medium transition-colors ${
-                    isCheckingOut || !selectedAddress
-                      ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                      : 'bg-green-600 hover:bg-green-700 text-white'
+                  key={method.value}
+                  onClick={() => setPaymentMethod(method.value)}
+                  className={`p-4 border-2 rounded-2xl text-left transition-all duration-200 ${
+                    paymentMethod === method.value
+                      ? 'border-orange-500 bg-orange-50'
+                      : 'border-gray-200 hover:border-orange-300'
                   }`}
                 >
-                  {isCheckingOut ? 'Processing...' : paymentMethod === 'cash' ? 'Place Order' : 'Pay Now'}
+                  <div className="flex items-center space-x-3">
+                    <input
+                      type="radio"
+                      checked={paymentMethod === method.value}
+                      onChange={() => setPaymentMethod(method.value)}
+                      className="text-orange-600"
+                    />
+                    <div className="flex items-center space-x-3">
+                      <span className="text-2xl">{method.icon}</span>
+                      <div>
+                        <div className="font-medium text-gray-800">{method.label}</div>
+                        <div className="text-sm text-gray-500">{method.desc}</div>
+                      </div>
+                    </div>
+                  </div>
                 </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Special Instructions */}
+          <div>
+            <h3 className="font-bold text-gray-800 mb-2">Special Instructions</h3>
+            <textarea
+              value={specialInstructions}
+              onChange={(e) => setSpecialInstructions(e.target.value)}
+              placeholder="Any special requests for your order..."
+              rows={3}
+              className="w-full px-4 py-3 border border-gray-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent resize-none"
+            />
+          </div>
+
+          {/* Estimated Delivery */}
+          <div className="bg-blue-50 border border-blue-200 rounded-2xl p-4">
+            <div className="flex items-center space-x-2 text-blue-800">
+              <span className="text-xl">🕒</span>
+              <div>
+                <div className="font-medium">Estimated Delivery</div>
+                <div className="text-sm">{restaurant?.delivery_time || '30-45 min'}</div>
               </div>
             </div>
           </div>
         </div>
-      )}
 
-      {/* Payment Link Modal */}
-      {showPaymentModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg max-w-md w-full mx-4 p-6">
-            <div className="flex justify-between items-center mb-6">
-              <h2 className="text-xl font-semibold text-gray-900">Complete Payment</h2>
+        {/* Footer */}
+        <div className="p-8 border-t border-gray-100">
+          <div className="flex space-x-4">
+            <button
+              onClick={onClose}
+              className="flex-1 py-3 bg-gray-100 text-gray-700 rounded-2xl hover:bg-gray-200 transition-colors font-medium"
+            >
+              Back to Cart
+            </button>
+            <button
+              onClick={handleCheckout}
+              disabled={isCheckingOut || !selectedAddress}
+              className={`flex-1 py-3 rounded-2xl font-medium transition-all duration-300 ${
+                isCheckingOut || !selectedAddress
+                  ? 'bg-gray-200 text-gray-500 cursor-not-allowed'
+                  : 'bg-gradient-to-r from-orange-500 to-red-500 text-white hover:shadow-lg'
+              }`}
+            >
+              {isCheckingOut ? 'Processing...' : paymentMethod === 'cash' ? 'Place Order' : 'Continue to Payment'}
+            </button>
+          </div>
+        </div>
+
+        {/* Add Address Modal */}
+        {showAddAddress && (
+          <AddAddressModal
+            newAddress={newAddress}
+            setNewAddress={setNewAddress}
+            handleAddAddress={handleAddAddress}
+            onClose={() => setShowAddAddress(false)}
+          />
+        )}
+      </div>
+    </div>
+  );
+};
+
+// Payment Modal Component
+const PaymentModal = ({ 
+  restaurant, paymentLink, paymentLoading, checkingPayment, 
+  createPaymentLink, handleOpenPaymentLink, copyLinkToClipboard, 
+  downloadQRCode, onClose 
+}) => {
+  return (
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+      <div className="bg-white rounded-3xl max-w-lg w-full shadow-2xl">
+        {/* Header */}
+        <div className="p-8 border-b border-gray-100">
+          <div className="flex justify-between items-center">
+            <div>
+              <h2 className="text-2xl font-bold text-gray-800">Complete Payment</h2>
+              <p className="text-gray-600">Secure payment for your order</p>
+            </div>
+            <button
+              onClick={onClose}
+              className="w-10 h-10 bg-gray-100 hover:bg-gray-200 rounded-2xl flex items-center justify-center text-gray-600 transition-colors"
+            >
+              ✕
+            </button>
+          </div>
+        </div>
+
+        {/* Content */}
+        <div className="p-8">
+          {!paymentLink ? (
+            <div className="text-center py-8">
+              <div className="w-20 h-20 bg-gradient-to-r from-orange-500 to-red-500 rounded-full flex items-center justify-center mx-auto mb-6">
+                <span className="text-3xl text-white">💳</span>
+              </div>
+              <h3 className="text-xl font-bold text-gray-800 mb-2">Ready to Pay?</h3>
+              <p className="text-gray-600 mb-6">We'll create a secure payment link for you</p>
               <button
-                onClick={() => setShowPaymentModal(false)}
-                className="text-gray-400 hover:text-gray-600"
+                onClick={createPaymentLink}
+                disabled={paymentLoading}
+                className="w-full py-4 bg-gradient-to-r from-orange-500 to-red-500 text-white rounded-2xl hover:shadow-xl transition-all duration-300 font-semibold disabled:opacity-50"
               >
-                ✕
+                {paymentLoading ? (
+                  <div className="flex items-center justify-center space-x-2">
+                    <div className="animate-spin h-5 w-5 border-2 border-white border-t-transparent rounded-full"></div>
+                    <span>Creating Payment Link...</span>
+                  </div>
+                ) : (
+                  'Create Payment Link'
+                )}
               </button>
             </div>
-
-            {!paymentLink && (
-              <div className="text-center py-8">
-                <button
-                  onClick={createPaymentLink}
-                  disabled={paymentLoading}
-                  className="w-full py-3 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 font-medium"
-                >
-                  {paymentLoading ? 'Creating Payment Link...' : 'Create Payment Link'}
-                </button>
+          ) : (
+            <div className="space-y-6">
+              {/* Payment Amount */}
+              <div className="text-center">
+                <h3 className="text-3xl font-bold text-orange-600 mb-2">${paymentLink.link_amount}</h3>
+                <p className="text-gray-600">Payment for {restaurant?.name}</p>
               </div>
-            )}
 
-            {paymentLink && (
-              <div className="space-y-6">
-                {/* Payment Amount */}
+              {/* QR Code */}
+              {paymentLink.link_qrcode && (
                 <div className="text-center">
-                  <h3 className="text-2xl font-bold text-green-600">₹{paymentLink.link_amount}</h3>
-                  <p className="text-gray-600">Payment for {restaurant?.name}</p>
-                </div>
-
-                {/* QR Code */}
-                {paymentLink.link_qrcode && (
-                  <div className="text-center">
-                    <div className="inline-block p-4 bg-white border-2 border-gray-200 rounded-lg">
-                      <img 
-                        src={paymentLink.link_qrcode} 
-                        alt="Payment QR Code"
-                        className="w-48 h-48 mx-auto"
-                      />
-                    </div>
-                    <p className="text-sm text-gray-600 mt-2">Scan QR code with any UPI app</p>
-                    <button
-                      onClick={downloadQRCode}
-                      className="text-blue-600 hover:text-blue-700 text-sm font-medium mt-1"
-                    >
-                      Download QR Code
-                    </button>
+                  <div className="inline-block p-6 bg-white border-2 border-gray-200 rounded-2xl shadow-lg">
+                    <img 
+                      src={paymentLink.link_qrcode} 
+                      alt="Payment QR Code"
+                      className="w-48 h-48 mx-auto"
+                    />
                   </div>
-                )}
-
-                {/* Payment Options */}
-                <div className="space-y-3">
+                  <p className="text-sm text-gray-600 mt-3">Scan QR code with any UPI app</p>
                   <button
-                    onClick={handleOpenPaymentLink}
-                    disabled={checkingPayment}
-                    className="w-full py-3 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 font-medium"
+                    onClick={downloadQRCode}
+                    className="text-orange-600 hover:text-orange-700 text-sm font-medium mt-2"
                   >
-                    {checkingPayment ? 'Waiting for Payment...' : 'Pay Now'}
-                  </button>
-
-                  <button
-                    onClick={copyLinkToClipboard}
-                    className="w-full py-2 border border-gray-300 text-gray-700 rounded-md hover:bg-gray-50 font-medium"
-                  >
-                    Copy Payment Link
+                    📥 Download QR Code
                   </button>
                 </div>
+              )}
 
-                {/* Payment Status */}
-                {checkingPayment && (
-                  <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
-                    <div className="flex items-center text-yellow-800">
-                      <div className="animate-spin h-4 w-4 border-2 border-yellow-600 border-t-transparent rounded-full mr-2"></div>
-                      <span className="text-sm">Waiting for payment confirmation...</span>
+              {/* Payment Options */}
+              <div className="space-y-3">
+                <button
+                  onClick={handleOpenPaymentLink}
+                  disabled={checkingPayment}
+                  className="w-full py-4 bg-gradient-to-r from-orange-500 to-red-500 text-white rounded-2xl hover:shadow-xl transition-all duration-300 font-semibold disabled:opacity-50"
+                >
+                  {checkingPayment ? (
+                    <div className="flex items-center justify-center space-x-2">
+                      <div className="animate-spin h-5 w-5 border-2 border-white border-t-transparent rounded-full"></div>
+                      <span>Waiting for Payment...</span>
                     </div>
-                    <p className="text-xs text-yellow-700 mt-1">
-                      Complete your payment in the opened tab. This will automatically detect when payment is successful.
-                    </p>
+                  ) : (
+                    '💳 Pay Now'
+                  )}
+                </button>
+
+                <button
+                  onClick={copyLinkToClipboard}
+                  className="w-full py-3 border-2 border-gray-200 text-gray-700 rounded-2xl hover:bg-gray-50 transition-colors font-medium"
+                >
+                  📋 Copy Payment Link
+                </button>
+              </div>
+
+              {/* Payment Status */}
+              {checkingPayment && (
+                <div className="bg-yellow-50 border border-yellow-200 rounded-2xl p-4">
+                  <div className="flex items-center text-yellow-800">
+                    <div className="animate-spin h-5 w-5 border-2 border-yellow-600 border-t-transparent rounded-full mr-3"></div>
+                    <div>
+                      <div className="font-medium">Waiting for payment confirmation...</div>
+                      <div className="text-sm">Complete your payment in the opened tab. We'll automatically detect when payment is successful.</div>
+                    </div>
                   </div>
-                )}
-              </div>
-            )}
-          </div>
+                </div>
+              )}
+            </div>
+          )}
         </div>
-      )}
+      </div>
+    </div>
+  );
+};
 
-      {/* Add Address Modal */}
-      {showAddAddress && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[60]">
-          <div className="bg-white rounded-lg p-4 w-full max-w-sm mx-4">
-            <h4 className="text-lg font-semibold text-gray-900 mb-3">Add New Address</h4>
-            
-            <div className="space-y-3">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Receiver Name *
-                </label>
-                <input
-                  type="text"
-                  value={newAddress.receiver_name}
-                  onChange={(e) => setNewAddress(prev => ({ ...prev, receiver_name: e.target.value }))}
-                  placeholder="Full name of person receiving order"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
-                  required
-                />
-              </div>
+// Add Address Modal Component
+const AddAddressModal = ({ newAddress, setNewAddress, handleAddAddress, onClose }) => {
+  return (
+    <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 z-[60]">
+      <div className="bg-white rounded-3xl p-8 w-full max-w-md shadow-2xl">
+        <div className="flex justify-between items-center mb-6">
+          <h3 className="text-xl font-bold text-gray-800">Add New Address</h3>
+          <button
+            onClick={onClose}
+            className="w-8 h-8 bg-gray-100 hover:bg-gray-200 rounded-xl flex items-center justify-center text-gray-600 transition-colors"
+          >
+            ✕
+          </button>
+        </div>
+        
+        <div className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Receiver Name *</label>
+            <input
+              type="text"
+              value={newAddress.receiver_name}
+              onChange={(e) => setNewAddress(prev => ({ ...prev, receiver_name: e.target.value }))}
+              placeholder="Full name of person receiving order"
+              className="w-full px-4 py-3 border border-gray-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+              required
+            />
+          </div>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Label (Optional)
-                </label>
-                <input
-                  type="text"
-                  value={newAddress.label}
-                  onChange={(e) => setNewAddress(prev => ({ ...prev, label: e.target.value }))}
-                  placeholder="Home, Work, etc."
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
-                />
-              </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Phone Number</label>
+            <input
+              type="tel"
+              value={newAddress.receiver_phone}
+              onChange={(e) => setNewAddress(prev => ({ ...prev, receiver_phone: e.target.value }))}
+              placeholder="Contact number for delivery"
+              className="w-full px-4 py-3 border border-gray-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+            />
+          </div>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Address Line 1 *
-                </label>
-                <input
-                  type="text"
-                  value={newAddress.address_line_1}
-                  onChange={(e) => setNewAddress(prev => ({ ...prev, address_line_1: e.target.value }))}
-                  placeholder="Street address"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
-                  required
-                />
-              </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Label (Optional)</label>
+            <input
+              type="text"
+              value={newAddress.label}
+              onChange={(e) => setNewAddress(prev => ({ ...prev, label: e.target.value }))}
+              placeholder="Home, Work, etc."
+              className="w-full px-4 py-3 border border-gray-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+            />
+          </div>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Address Line 2 (Optional)
-                </label>
-                <input
-                  type="text"
-                  value={newAddress.address_line_2}
-                  onChange={(e) => setNewAddress(prev => ({ ...prev, address_line_2: e.target.value }))}
-                  placeholder="Apartment, suite, etc."
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
-                />
-              </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Address Line 1 *</label>
+            <input
+              type="text"
+              value={newAddress.address_line_1}
+              onChange={(e) => setNewAddress(prev => ({ ...prev, address_line_1: e.target.value }))}
+              placeholder="Street address"
+              className="w-full px-4 py-3 border border-gray-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+              required
+            />
+          </div>
 
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    City *
-                  </label>
-                  <input
-                    type="text"
-                    value={newAddress.city}
-                    onChange={(e) => setNewAddress(prev => ({ ...prev, city: e.target.value }))}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
-                    required
-                  />
-                </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Address Line 2</label>
+            <input
+              type="text"
+              value={newAddress.address_line_2}
+              onChange={(e) => setNewAddress(prev => ({ ...prev, address_line_2: e.target.value }))}
+              placeholder="Apartment, suite, etc."
+              className="w-full px-4 py-3 border border-gray-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+            />
+          </div>
 
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    State *
-                  </label>
-                  <input
-                    type="text"
-                    value={newAddress.state}
-                    onChange={(e) => setNewAddress(prev => ({ ...prev, state: e.target.value }))}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
-                    required
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  ZIP Code *
-                </label>
-                <input
-                  type="text"
-                  value={newAddress.zip_code}
-                  onChange={(e) => setNewAddress(prev => ({ ...prev, zip_code: e.target.value }))}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
-                  required
-                />
-              </div>
-
-              <div className="flex items-center">
-                <input
-                  type="checkbox"
-                  checked={newAddress.is_default}
-                  onChange={(e) => setNewAddress(prev => ({ ...prev, is_default: e.target.checked }))}
-                  className="mr-2 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                />
-                <label className="text-sm text-gray-700">
-                  Set as default address
-                </label>
-              </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">City *</label>
+              <input
+                type="text"
+                value={newAddress.city}
+                onChange={(e) => setNewAddress(prev => ({ ...prev, city: e.target.value }))}
+                className="w-full px-4 py-3 border border-gray-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                required
+              />
             </div>
 
-            <div className="flex space-x-2 mt-4">
-              <button
-                onClick={() => setShowAddAddress(false)}
-                className="flex-1 py-2 px-3 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50 text-sm"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleAddAddress}
-                disabled={!newAddress.receiver_name || !newAddress.address_line_1 || !newAddress.city || !newAddress.state || !newAddress.zip_code}
-                className="flex-1 py-2 px-3 bg-blue-600 hover:bg-blue-700 text-white rounded-md disabled:opacity-50 text-sm"
-              >
-                Add Address
-              </button>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">State *</label>
+              <input
+                type="text"
+                value={newAddress.state}
+                onChange={(e) => setNewAddress(prev => ({ ...prev, state: e.target.value }))}
+                className="w-full px-4 py-3 border border-gray-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                required
+              />
             </div>
           </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">ZIP Code *</label>
+            <input
+              type="text"
+              value={newAddress.zip_code}
+              onChange={(e) => setNewAddress(prev => ({ ...prev, zip_code: e.target.value }))}
+              className="w-full px-4 py-3 border border-gray-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+              required
+            />
+          </div>
+
+          <div className="flex items-center space-x-3">
+            <input
+              type="checkbox"
+              checked={newAddress.is_default}
+              onChange={(e) => setNewAddress(prev => ({ ...prev, is_default: e.target.checked }))}
+              className="rounded border-gray-300 text-orange-600 focus:ring-orange-500"
+            />
+            <label className="text-sm text-gray-700">Set as default address</label>
+          </div>
         </div>
-      )}
+
+        <div className="flex space-x-4 mt-8">
+          <button
+            onClick={onClose}
+            className="flex-1 py-3 bg-gray-100 text-gray-700 rounded-2xl hover:bg-gray-200 transition-colors font-medium"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={handleAddAddress}
+            disabled={!newAddress.receiver_name || !newAddress.address_line_1 || !newAddress.city || !newAddress.state || !newAddress.zip_code}
+            className="flex-1 py-3 bg-gradient-to-r from-orange-500 to-red-500 text-white rounded-2xl hover:shadow-lg transition-all duration-300 font-medium disabled:opacity-50"
+          >
+            Add Address
+          </button>
+        </div>
+      </div>
     </div>
   );
 };

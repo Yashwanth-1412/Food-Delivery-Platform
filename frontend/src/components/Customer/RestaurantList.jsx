@@ -1,4 +1,4 @@
-// frontend/src/components/Customer/RestaurantList.jsx - FIXED VERSION
+// frontend/src/components/Customer/RestaurantList.jsx
 import React, { useState, useEffect } from 'react';
 import { customerService } from '../../services/customerApi';
 
@@ -40,123 +40,134 @@ const RestaurantList = ({ onSelectRestaurant }) => {
             rating: restaurant.rating || 4.0,
             delivery_time: restaurant.delivery_time || '30-45 min',
             delivery_fee: restaurant.delivery_fee || 2.99,
-            min_order: restaurant.min_order || 15.00,
-            is_open: restaurant.is_open !== false, // Default to true if not specified
-            address: restaurant.address || restaurant.address_line_1,
-            phone: restaurant.phone
+            minimum_order: restaurant.minimum_order || 15.00,
+            is_open: restaurant.is_open !== undefined ? restaurant.is_open : true,
+            distance: restaurant.distance || '2.5 km'
           }));
           
           setRestaurants(mappedRestaurants);
-          return;
+          console.log('Loaded restaurants from backend:', mappedRestaurants.length);
+        } else {
+          throw new Error('No restaurants found in backend');
         }
       } catch (error) {
-        console.log('Backend not available, using mock data:', error);
+        console.error('Error loading restaurants from backend:', error);
+        console.log('Using mock restaurant data');
+        
+        // Fallback to mock data
+        const mockRestaurants = [
+          {
+            id: 'mock1',
+            name: 'Bella Italia',
+            description: 'Authentic Italian cuisine with fresh ingredients',
+            cuisine: 'Italian',
+            rating: 4.5,
+            delivery_time: '25-35 min',
+            delivery_fee: 2.99,
+            minimum_order: 15.00,
+            is_open: true,
+            distance: '1.2 km',
+            image_url: null
+          },
+          {
+            id: 'mock2',
+            name: 'Spice Garden',
+            description: 'Traditional Indian flavors and aromatic spices',
+            cuisine: 'Indian',
+            rating: 4.3,
+            delivery_time: '30-40 min',
+            delivery_fee: 1.99,
+            minimum_order: 20.00,
+            is_open: true,
+            distance: '2.8 km',
+            image_url: null
+          },
+          {
+            id: 'mock3',
+            name: 'Tokyo Sushi',
+            description: 'Fresh sushi and Japanese delicacies',
+            cuisine: 'Japanese',
+            rating: 4.7,
+            delivery_time: '20-30 min',
+            delivery_fee: 3.99,
+            minimum_order: 25.00,
+            is_open: false,
+            distance: '1.5 km',
+            image_url: null
+          },
+          {
+            id: 'mock4',
+            name: 'Burger Palace',
+            description: 'Gourmet burgers and crispy fries',
+            cuisine: 'American',
+            rating: 4.2,
+            delivery_time: '15-25 min',
+            delivery_fee: 2.49,
+            minimum_order: 12.00,
+            is_open: true,
+            distance: '0.8 km',
+            image_url: null
+          },
+          {
+            id: 'mock5',
+            name: 'Green Bowl',
+            description: 'Healthy salads and fresh smoothies',
+            cuisine: 'Healthy',
+            rating: 4.4,
+            delivery_time: '20-30 min',
+            delivery_fee: 1.99,
+            minimum_order: 18.00,
+            is_open: true,
+            distance: '1.8 km',
+            image_url: null
+          }
+        ];
+        
+        setRestaurants(mockRestaurants);
       }
-      
-      // Fallback to mock data if backend is not available
-      const mockRestaurants = [
-        {
-          id: '1',
-          restaurant_name: 'Burger Spot',
-          name: 'Burger Spot',
-          description: 'Lets eat fast burgers',
-          cuisine_type: 'american',
-          cuisine: 'american',
-          logo_url: 'http://localhost:5000/static/uploads/restaurant_logos/logo_1_xyz.jpg',
-          image_url: 'http://localhost:5000/static/uploads/restaurant_logos/logo_1_xyz.jpg',
-          rating: 4.5,
-          delivery_time: '30-45 min',
-          delivery_fee: 2.99,
-          min_order: 15.00,
-          is_open: true,
-          address: '123 Main St',
-          phone: '(555) 123-4567'
-        },
-        {
-          id: '2',
-          restaurant_name: 'Pizza Palace',
-          name: 'Pizza Palace',
-          description: 'Authentic Italian pizzas made fresh',
-          cuisine_type: 'italian',
-          cuisine: 'italian',
-          logo_url: '/api/placeholder/150/150',
-          image_url: '/api/placeholder/300/200',
-          rating: 4.2,
-          delivery_time: '25-40 min',
-          delivery_fee: 3.49,
-          min_order: 20.00,
-          is_open: true,
-          address: '456 Oak Ave',
-          phone: '(555) 987-6543'
-        },
-        {
-          id: '3',
-          restaurant_name: 'Taco House',
-          name: 'Taco House',
-          description: 'Fresh Mexican cuisine and tacos',
-          cuisine_type: 'mexican',
-          cuisine: 'mexican',
-          logo_url: '/api/placeholder/150/150',
-          image_url: '/api/placeholder/300/200',
-          rating: 4.7,
-          delivery_time: '20-35 min',
-          delivery_fee: 2.49,
-          min_order: 12.00,
-          is_open: false,
-          address: '789 Pine St',
-          phone: '(555) 456-7890'
-        }
-      ];
-      
-      setRestaurants(mockRestaurants);
     } catch (error) {
       console.error('Error loading restaurants:', error);
       setRestaurants([]);
     } finally {
       setLoading(false);
     }
-  };;
+  };
 
   const filterAndSortRestaurants = () => {
     let filtered = [...restaurants];
 
-    // Search filter
-    if (searchTerm.trim()) {
-      filtered = filtered.filter(restaurant => 
-        (restaurant.restaurant_name || restaurant.name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-        (restaurant.description || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-        (restaurant.cuisine_type || restaurant.cuisine || '').toLowerCase().includes(searchTerm.toLowerCase())
-      );
-    }
-
-    // Cuisine filter
-    if (selectedCuisine !== 'all') {
-      filtered = filtered.filter(restaurant => 
-        (restaurant.cuisine_type || restaurant.cuisine) === selectedCuisine
-      );
-    }
-
-    // Open status filter
+    // Filter by open status
     if (showOpenOnly) {
       filtered = filtered.filter(restaurant => restaurant.is_open);
+    }
+
+    // Filter by search term
+    if (searchTerm) {
+      filtered = filtered.filter(restaurant =>
+        restaurant.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        restaurant.cuisine.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        restaurant.description.toLowerCase().includes(searchTerm.toLowerCase())
+      );
+    }
+
+    // Filter by cuisine
+    if (selectedCuisine !== 'all') {
+      filtered = filtered.filter(restaurant =>
+        restaurant.cuisine.toLowerCase() === selectedCuisine.toLowerCase()
+      );
     }
 
     // Sort restaurants
     filtered.sort((a, b) => {
       switch (sortBy) {
         case 'rating':
-          return (b.rating || 0) - (a.rating || 0);
-        case 'delivery_time': {
-          const aTime = parseInt((a.delivery_time || '999').replace(/\D/g, '')) || 999;
-          const bTime = parseInt((b.delivery_time || '999').replace(/\D/g, '')) || 999;
-          return aTime - bTime;
-        }
+          return b.rating - a.rating;
+        case 'delivery_time':
+          return parseInt(a.delivery_time) - parseInt(b.delivery_time);
         case 'delivery_fee':
-          return (a.delivery_fee || 999) - (b.delivery_fee || 999);
-        case 'name':
-          const aName = a.restaurant_name || a.name || '';
-          const bName = b.restaurant_name || b.name || '';
-          return aName.localeCompare(bName);
+          return a.delivery_fee - b.delivery_fee;
+        case 'distance':
+          return parseFloat(a.distance) - parseFloat(b.distance);
         default:
           return 0;
       }
@@ -166,116 +177,40 @@ const RestaurantList = ({ onSelectRestaurant }) => {
   };
 
   const getCuisineTypes = () => {
-    const cuisines = [...new Set(restaurants.map(r => r.cuisine_type || r.cuisine))].filter(Boolean);
+    const cuisines = [...new Set(restaurants.map(r => r.cuisine))];
     return cuisines.sort();
   };
 
-  const RestaurantCard = ({ restaurant }) => {
-    // Get the restaurant name (try multiple field names for compatibility)
-    const restaurantName = restaurant.restaurant_name || restaurant.name || 'Unknown Restaurant';
-    
-    // Get the logo/image URL (try multiple field names)
-    const imageUrl = restaurant.logo_url || restaurant.image_url || '/api/placeholder/300/200';
-    
-    // Get cuisine type
-    const cuisineType = restaurant.cuisine_type || restaurant.cuisine || 'Various';
-    
-    return (
-      <div 
-        className="bg-white rounded-lg shadow-sm border hover:shadow-md transition-shadow cursor-pointer"
-        onClick={() => onSelectRestaurant(restaurant)}
-      >
-        <div className="relative">
-          <img
-            src={imageUrl}
-            alt={restaurantName}
-            className="w-full h-48 object-cover rounded-t-lg"
-            onError={(e) => {
-              e.target.src = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMzAwIiBoZWlnaHQ9IjIwMCIgdmlld0JveD0iMCAwIDMwMCAyMDAiIGZpbGw9Im5vbmUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+CjxyZWN0IHdpZHRoPSIzMDAiIGhlaWdodD0iMjAwIiBmaWxsPSIjRjNGNEY2Ii8+CjxwYXRoIGQ9Ik0xMjAgODBIMTgwVjEyMEgxMjBWODBaIiBmaWxsPSIjOUI5QjlCIi8+Cjx0ZXh0IHg9IjE1MCIgeT0iMTM1IiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBmaWxsPSIjOUI5QjlCIiBmb250LXNpemU9IjEyIj5JbWFnZTwvdGV4dD4KPC9zdmc+';
-            }}
-          />
-          
-          {/* Restaurant Status Badge */}
-          <div className="absolute top-3 left-3">
-            <div className={`px-2 py-1 rounded-full text-xs font-medium ${
-              restaurant.is_open 
-                ? 'bg-green-100 text-green-800' 
-                : 'bg-red-100 text-red-800'
-            }`}>
-              {restaurant.is_open ? 'Open' : 'Closed'}
-            </div>
-          </div>
-
-          {/* Rating Badge */}
-          {restaurant.rating && (
-            <div className="absolute top-3 right-3 bg-white px-2 py-1 rounded-full shadow-sm">
-              <div className="flex items-center space-x-1">
-                <span className="text-yellow-400">⭐</span>
-                <span className="text-sm font-medium">{restaurant.rating}</span>
-              </div>
-            </div>
-          )}
-        </div>
-
-        <div className="p-4">
-          {/* Restaurant Name */}
-          <h3 className="text-lg font-semibold text-gray-900 mb-1">
-            {restaurantName}
-          </h3>
-          
-          {/* Cuisine Type */}
-          <p className="text-sm text-gray-600 mb-2 capitalize">
-            {cuisineType}
-          </p>
-          
-          {/* Description */}
-          {restaurant.description && (
-            <p className="text-sm text-gray-600 mb-3 line-clamp-2">
-              {restaurant.description}
-            </p>
-          )}
-
-          {/* Delivery Info */}
-          <div className="flex items-center justify-between text-sm text-gray-600 mb-3">
-            <div className="flex items-center space-x-4">
-              <div className="flex items-center space-x-1">
-                <span>🕒</span>
-                <span>{restaurant.delivery_time || '30-45 min'}</span>
-              </div>
-              <div className="flex items-center space-x-1">
-                <span>🚚</span>
-                <span>${restaurant.delivery_fee || '2.99'}</span>
-              </div>
-            </div>
-          </div>
-
-          {/* Min Order */}
-          {restaurant.min_order && (
-            <div className="text-xs text-gray-500">
-              Min order: ${restaurant.min_order}
-            </div>
-          )}
-        </div>
-      </div>
-    );
+  const getCuisineEmoji = (cuisine) => {
+    const emojiMap = {
+      'Italian': '🍝',
+      'Indian': '🍛',
+      'Japanese': '🍣',
+      'American': '🍔',
+      'Chinese': '🥢',
+      'Mexican': '🌮',
+      'Thai': '🍜',
+      'French': '🥐',
+      'Healthy': '🥗',
+      'Pizza': '🍕',
+      'Dessert': '🧁'
+    };
+    return emojiMap[cuisine] || '🍽️';
   };
 
   if (loading) {
     return (
-      <div className="space-y-4">
-        <div className="animate-pulse">
-          <div className="h-8 bg-gray-200 rounded w-1/3 mb-4"></div>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {[...Array(6)].map((_, i) => (
-              <div key={i} className="bg-white rounded-lg shadow-sm border">
-                <div className="h-48 bg-gray-200 rounded-t-lg"></div>
-                <div className="p-4 space-y-3">
-                  <div className="h-4 bg-gray-200 rounded w-3/4"></div>
-                  <div className="h-3 bg-gray-200 rounded w-full"></div>
-                  <div className="h-3 bg-gray-200 rounded w-1/2"></div>
-                </div>
+      <div className="p-12">
+        <div className="flex items-center justify-center min-h-96">
+          <div className="text-center">
+            <div className="w-20 h-20 mx-auto mb-6 relative">
+              <div className="absolute inset-0 bg-gradient-to-r from-orange-400 to-red-500 rounded-full animate-pulse"></div>
+              <div className="absolute inset-2 bg-white rounded-full flex items-center justify-center">
+                <span className="text-2xl">🍽️</span>
               </div>
-            ))}
+            </div>
+            <h3 className="text-xl font-bold text-gray-800 mb-2">Finding Amazing Restaurants</h3>
+            <p className="text-gray-600">Discovering delicious options near you...</p>
           </div>
         </div>
       </div>
@@ -283,25 +218,32 @@ const RestaurantList = ({ onSelectRestaurant }) => {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="p-8">
       {/* Header */}
-      <div>
-        <h2 className="text-2xl font-bold text-gray-900 mb-2">Restaurants Near You</h2>
-        <p className="text-gray-600">Discover amazing food from local restaurants</p>
+      <div className="mb-8">
+        <h1 className="text-4xl font-bold bg-gradient-to-r from-orange-600 to-red-600 bg-clip-text text-transparent mb-3">
+          Discover Restaurants
+        </h1>
+        <p className="text-xl text-gray-600">Find amazing food delivered to your door</p>
       </div>
 
-      {/* Filters */}
-      <div className="bg-white p-4 rounded-lg shadow-sm border">
+      {/* Search and Filters */}
+      <div className="bg-white/80 backdrop-blur-sm rounded-3xl shadow-xl border border-orange-100 p-6 mb-8">
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           {/* Search */}
           <div className="md:col-span-2">
-            <input
-              type="text"
-              placeholder="Search restaurants, food, or cuisine..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            />
+            <div className="relative">
+              <input
+                type="text"
+                placeholder="Search restaurants, cuisines, or dishes..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full pl-12 pr-4 py-4 bg-gray-50 border border-gray-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent text-gray-700 text-lg"
+              />
+              <div className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 text-xl">
+                🔍
+              </div>
+            </div>
           </div>
 
           {/* Cuisine Filter */}
@@ -309,12 +251,12 @@ const RestaurantList = ({ onSelectRestaurant }) => {
             <select
               value={selectedCuisine}
               onChange={(e) => setSelectedCuisine(e.target.value)}
-              className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              className="w-full py-4 px-4 bg-gray-50 border border-gray-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-orange-500 text-gray-700 text-lg"
             >
               <option value="all">All Cuisines</option>
               {getCuisineTypes().map(cuisine => (
-                <option key={cuisine} value={cuisine} className="capitalize">
-                  {cuisine}
+                <option key={cuisine} value={cuisine}>
+                  {getCuisineEmoji(cuisine)} {cuisine}
                 </option>
               ))}
             </select>
@@ -325,53 +267,177 @@ const RestaurantList = ({ onSelectRestaurant }) => {
             <select
               value={sortBy}
               onChange={(e) => setSortBy(e.target.value)}
-              className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              className="w-full py-4 px-4 bg-gray-50 border border-gray-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-orange-500 text-gray-700 text-lg"
             >
-              <option value="rating">Sort by Rating</option>
-              <option value="delivery_time">Sort by Delivery Time</option>
-              <option value="delivery_fee">Sort by Delivery Fee</option>
-              <option value="name">Sort by Name</option>
+              <option value="rating">⭐ Rating</option>
+              <option value="delivery_time">⏱️ Delivery Time</option>
+              <option value="delivery_fee">💰 Delivery Fee</option>
+              <option value="distance">📍 Distance</option>
             </select>
           </div>
         </div>
 
-        {/* Additional Filters */}
-        <div className="mt-4 flex items-center">
-          <label className="flex items-center">
-            <input
-              type="checkbox"
-              checked={showOpenOnly}
-              onChange={(e) => setShowOpenOnly(e.target.checked)}
-              className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-            />
-            <span className="ml-2 text-sm text-gray-700">Open now only</span>
-          </label>
+        {/* Toggle Filters */}
+        <div className="mt-6 flex flex-wrap gap-4">
+          <button
+            onClick={() => setShowOpenOnly(!showOpenOnly)}
+            className={`px-6 py-3 rounded-2xl font-medium transition-all duration-200 ${
+              showOpenOnly
+                ? 'bg-gradient-to-r from-green-500 to-emerald-500 text-white shadow-lg'
+                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+            }`}
+          >
+            <span className="mr-2">🟢</span>
+            Open Now Only
+          </button>
           
-          <div className="ml-4 text-sm text-gray-500">
-            Showing {filteredRestaurants.length} of {restaurants.length} restaurants
+          <div className="text-gray-600 font-medium py-3 px-2">
+            Found {filteredRestaurants.length} restaurant{filteredRestaurants.length !== 1 ? 's' : ''}
           </div>
         </div>
       </div>
 
       {/* Restaurant Grid */}
       {filteredRestaurants.length === 0 ? (
-        <div className="text-center py-12">
-          <div className="text-6xl mb-4">🍽️</div>
-          <h3 className="text-lg font-semibold text-gray-900 mb-2">No restaurants found</h3>
-          <p className="text-gray-500">
-            {searchTerm || selectedCuisine !== 'all' || showOpenOnly
-              ? 'Try adjusting your filters to see more results'
-              : 'No restaurants available at the moment'
-            }
-          </p>
+        <div className="text-center py-16">
+          <div className="w-24 h-24 bg-gradient-to-r from-gray-100 to-gray-200 rounded-full flex items-center justify-center mx-auto mb-6">
+            <span className="text-4xl text-gray-400">🔍</span>
+          </div>
+          <h3 className="text-2xl font-bold text-gray-800 mb-3">No restaurants found</h3>
+          <p className="text-gray-600 mb-6">Try adjusting your search or filters</p>
+          <button
+            onClick={() => {
+              setSearchTerm('');
+              setSelectedCuisine('all');
+              setShowOpenOnly(false);
+            }}
+            className="px-8 py-4 bg-gradient-to-r from-orange-500 to-red-500 text-white rounded-2xl hover:shadow-xl transition-all duration-300 font-semibold"
+          >
+            Clear Filters
+          </button>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {filteredRestaurants.map(restaurant => (
-            <RestaurantCard key={restaurant.id} restaurant={restaurant} />
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+          {filteredRestaurants.map((restaurant) => (
+            <RestaurantCard
+              key={restaurant.id}
+              restaurant={restaurant}
+              onSelect={() => onSelectRestaurant(restaurant)}
+              getCuisineEmoji={getCuisineEmoji}
+            />
           ))}
         </div>
       )}
+    </div>
+  );
+};
+
+// Premium Restaurant Card Component
+const RestaurantCard = ({ restaurant, onSelect, getCuisineEmoji }) => {
+  return (
+    <div 
+      onClick={onSelect}
+      className="bg-white/80 backdrop-blur-sm rounded-3xl shadow-xl border border-orange-100 overflow-hidden cursor-pointer transform transition-all duration-300 hover:scale-105 hover:shadow-2xl group"
+    >
+      {/* Restaurant Image */}
+      <div className="h-48 bg-gradient-to-br from-orange-100 via-red-50 to-yellow-100 relative overflow-hidden">
+        {restaurant.image_url ? (
+          <img
+            src={restaurant.image_url}
+            alt={restaurant.name}
+            className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
+          />
+        ) : (
+          <div className="w-full h-full flex items-center justify-center">
+            <div className="text-center">
+              <div className="text-6xl mb-2">{getCuisineEmoji(restaurant.cuisine)}</div>
+              <div className="text-gray-500 font-medium">{restaurant.cuisine}</div>
+            </div>
+          </div>
+        )}
+        
+        {/* Status Badge */}
+        <div className="absolute top-4 left-4">
+          <span className={`px-3 py-1 rounded-full text-sm font-bold ${
+            restaurant.is_open
+              ? 'bg-green-500 text-white'
+              : 'bg-red-500 text-white'
+          }`}>
+            {restaurant.is_open ? '🟢 Open' : '🔴 Closed'}
+          </span>
+        </div>
+
+        {/* Rating Badge */}
+        <div className="absolute top-4 right-4 bg-white/90 backdrop-blur-sm rounded-xl px-3 py-1">
+          <div className="flex items-center space-x-1">
+            <span className="text-yellow-500">⭐</span>
+            <span className="font-bold text-gray-800">{restaurant.rating}</span>
+          </div>
+        </div>
+      </div>
+
+      {/* Restaurant Info */}
+      <div className="p-6">
+        <div className="mb-3">
+          <h3 className="text-xl font-bold text-gray-800 mb-1 group-hover:text-orange-600 transition-colors">
+            {restaurant.name}
+          </h3>
+          <p className="text-gray-600 text-sm leading-relaxed">
+            {restaurant.description}
+          </p>
+        </div>
+
+        {/* Cuisine Type */}
+        <div className="mb-4">
+          <span className="inline-flex items-center px-3 py-1 bg-gradient-to-r from-orange-100 to-red-100 text-orange-700 rounded-full text-sm font-medium">
+            <span className="mr-2">{getCuisineEmoji(restaurant.cuisine)}</span>
+            {restaurant.cuisine}
+          </span>
+        </div>
+
+        {/* Details Grid */}
+        <div className="grid grid-cols-2 gap-4 text-sm">
+          <div className="bg-gray-50 rounded-xl p-3">
+            <div className="flex items-center space-x-2">
+              <span>⏱️</span>
+              <span className="font-medium text-gray-700">{restaurant.delivery_time}</span>
+            </div>
+          </div>
+          
+          <div className="bg-gray-50 rounded-xl p-3">
+            <div className="flex items-center space-x-2">
+              <span>🚚</span>
+              <span className="font-medium text-gray-700">${restaurant.delivery_fee}</span>
+            </div>
+          </div>
+          
+          <div className="bg-gray-50 rounded-xl p-3">
+            <div className="flex items-center space-x-2">
+              <span>📍</span>
+              <span className="font-medium text-gray-700">{restaurant.distance}</span>
+            </div>
+          </div>
+          
+          <div className="bg-gray-50 rounded-xl p-3">
+            <div className="flex items-center space-x-2">
+              <span>💳</span>
+              <span className="font-medium text-gray-700">Min ${restaurant.minimum_order}</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Action Button */}
+        <button 
+          className={`w-full mt-6 py-4 rounded-2xl font-bold text-lg transition-all duration-300 ${
+            restaurant.is_open
+              ? 'bg-gradient-to-r from-orange-500 to-red-500 text-white hover:shadow-xl hover:scale-102'
+              : 'bg-gray-200 text-gray-500 cursor-not-allowed'
+          }`}
+          disabled={!restaurant.is_open}
+        >
+          {restaurant.is_open ? 'View Menu 🍽️' : 'Currently Closed'}
+        </button>
+      </div>
     </div>
   );
 };

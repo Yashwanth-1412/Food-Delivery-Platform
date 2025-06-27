@@ -26,6 +26,7 @@ from routes.customer import customer_bp
 from routes.agent import agent_bp  # Add agent routes
 from routes.payment import payment_bp
 
+
 def create_app():
     """Application factory pattern"""
     app = Flask(__name__)
