@@ -2,11 +2,12 @@
 import requests
 import uuid
 from datetime import datetime, timedelta
+import os
 
 class CashfreeService:
     def __init__(self):
-        self.app_id = "TEST106859960160a23d509cd5b5fd4069958601"
-        self.secret_key = "cfsk_ma_test_08664407457fdd369d5eeb1aa17c5783_a0d69e13"
+        self.app_id = os.getenv("CASHFREE_APP_ID")
+        self.secret_key = os.getenv("CASHFREE_SECRET_KEY")
         self.api_version = "2025-01-01"
         self.base_url = "https://sandbox.cashfree.com/pg"
     
@@ -37,8 +38,8 @@ class CashfreeService:
                     'customer_phone': customer_details['customer_phone']
                 },
                 'link_meta': {
-                    'return_url': 'http://localhost:5173/payment/success',  # Your frontend URL
-                    'notify_url': 'http://localhost:5000/api/payment/webhook',  # Your webhook URL
+                    'return_url': f"{os.getenv('FRONTEND_URL', 'http://localhost:5173')}/payment/success",
+                    'notify_url': f"{os.getenv('BACKEND_URL', 'http://localhost:5000')}/api/payment/webhook",
                     'upi_intent': True
                 },
                 'link_expiry_time': expiry_time,

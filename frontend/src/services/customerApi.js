@@ -1,7 +1,7 @@
 // frontend/src/services/customerApi.js - Fixed API base URL
 import { auth } from '../firebase/config';
 
-const API_BASE_URL = 'http://localhost:5000/api';  // Make sure no trailing slash
+const API_BASE_URL = `${import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000'}/api`;
 
 class CustomerService {
   constructor() {
