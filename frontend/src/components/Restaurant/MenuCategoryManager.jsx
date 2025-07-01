@@ -108,58 +108,137 @@ const MenuCategoryManager = ({ onClose }) => {
     }));
   };
 
+  // Loading Screen matching the design system
   if (loading) {
     return (
-      <div className="p-6">
-        <div className="animate-pulse">
-          <div className="h-6 bg-gray-200 rounded w-1/3 mb-4"></div>
-          <div className="space-y-4">
-            {[...Array(3)].map((_, i) => (
-              <div key={i} className="h-16 bg-gray-200 rounded"></div>
-            ))}
+      <div className="p-8">
+        <div className="text-center">
+          <div className="w-16 h-16 mx-auto mb-6 relative">
+            <div className="absolute inset-0 bg-gradient-to-r from-green-400 to-teal-500 rounded-full animate-pulse"></div>
+            <div className="absolute inset-2 bg-white rounded-full flex items-center justify-center">
+              <span className="text-2xl">📁</span>
+            </div>
           </div>
+          <h2 className="text-xl font-bold text-gray-800 mb-2">Loading Categories</h2>
+          <p className="text-gray-600">Getting your menu organization ready...</p>
         </div>
       </div>
     );
   }
 
-  return (
-    <div className="p-6">
-      {/* Header */}
-      <div className="flex justify-between items-center mb-6">
-        <div>
-          <h2 className="text-2xl font-bold text-gray-900">Menu Categories</h2>
-          <p className="text-gray-600">Organize your menu items into categories</p>
+  const CategoryCard = ({ category }) => (
+    <div className="bg-white/80 backdrop-blur-xl rounded-2xl p-6 shadow-lg border border-orange-100 hover:shadow-xl transition-all duration-300 hover:scale-102">
+      <div className="flex items-start justify-between mb-4">
+        <div className="flex items-center space-x-3">
+          <div className="w-12 h-12 bg-gradient-to-r from-green-400 to-teal-500 rounded-2xl flex items-center justify-center shadow-lg">
+            <span className="text-2xl">📁</span>
+          </div>
+          <div>
+            <h3 className="text-lg font-bold text-gray-900">{category.name}</h3>
+            <p className="text-sm text-gray-600">Order: {category.sort_order || 0}</p>
+          </div>
         </div>
-        <div className="flex space-x-3">
+        <span className={`px-3 py-1 rounded-full text-xs font-medium ${
+          category.is_available !== false
+            ? 'bg-green-100 text-green-800'
+            : 'bg-red-100 text-red-800'
+        }`}>
+          {category.is_available !== false ? 'Available' : 'Hidden'}
+        </span>
+      </div>
+      
+      <div className="mb-4">
+        <p className="text-gray-700 text-sm leading-relaxed">
+          {category.description || 'No description provided'}
+        </p>
+      </div>
+      
+      <div className="flex items-center justify-between">
+        <div className="flex items-center space-x-4">
+          <div className="bg-blue-50 rounded-xl px-3 py-2">
+            <span className="text-xs text-blue-600 font-medium">
+              {category.items_count || 0} items
+            </span>
+          </div>
+        </div>
+        
+        <div className="flex space-x-2">
           <button
-            onClick={() => setShowAddForm(true)}
-            className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-md text-sm font-medium transition-colors"
+            onClick={() => handleEdit(category)}
+            className="p-2 text-blue-600 hover:bg-blue-50 rounded-xl transition-colors"
+            title="Edit category"
           >
-            + Add Category
+            ✏️
           </button>
-          {onClose && (
+          <button
+            onClick={() => handleDelete(category.id, category.name)}
+            className={`p-2 rounded-xl transition-colors ${
+              category.items_count > 0 
+                ? 'text-gray-400 cursor-not-allowed' 
+                : 'text-red-600 hover:bg-red-50'
+            }`}
+            disabled={category.items_count > 0}
+            title={category.items_count > 0 ? 'Cannot delete category with menu items' : 'Delete category'}
+          >
+            🗑️
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+
+  return (
+    <div className="p-8 space-y-8">
+      {/* Header Section */}
+      <div className="bg-white/80 backdrop-blur-xl rounded-3xl p-8 shadow-xl border border-orange-100">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center space-x-4">
+            <div className="w-14 h-14 bg-gradient-to-r from-green-500 to-teal-500 rounded-2xl flex items-center justify-center shadow-lg">
+              <span className="text-2xl">📁</span>
+            </div>
+            <div>
+              <h1 className="text-3xl font-bold bg-gradient-to-r from-green-600 to-teal-600 bg-clip-text text-transparent">
+                Menu Categories
+              </h1>
+              <p className="text-gray-600 mt-1">Organize your menu items into categories</p>
+            </div>
+          </div>
+          
+          <div className="flex items-center space-x-3">
             <button
-              onClick={onClose}
-              className="text-gray-500 hover:text-gray-700 p-2"
+              onClick={() => setShowAddForm(true)}
+              className="bg-gradient-to-r from-green-500 to-teal-500 hover:from-green-600 hover:to-teal-600 text-white px-6 py-3 rounded-2xl font-semibold shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105"
             >
-              ✕
+              ➕ Add Category
             </button>
-          )}
+            {onClose && (
+              <button
+                onClick={onClose}
+                className="p-3 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-2xl transition-colors"
+              >
+                ✕
+              </button>
+            )}
+          </div>
         </div>
       </div>
 
       {/* Add/Edit Form */}
       {showAddForm && (
-        <div className="bg-white border border-gray-200 rounded-lg p-6 mb-6">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">
-            {editingCategory ? 'Edit Category' : 'Add New Category'}
-          </h3>
+        <div className="bg-white/80 backdrop-blur-xl rounded-3xl p-8 shadow-xl border border-orange-100">
+          <div className="flex items-center space-x-3 mb-6">
+            <div className="w-10 h-10 bg-gradient-to-r from-blue-400 to-purple-500 rounded-2xl flex items-center justify-center">
+              <span className="text-xl">✏️</span>
+            </div>
+            <h3 className="text-2xl font-bold text-gray-900">
+              {editingCategory ? 'Edit Category' : 'Add New Category'}
+            </h3>
+          </div>
           
-          <div className="space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="space-y-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div>
-                <label htmlFor="name" className="block text-sm font-medium text-gray-700 mb-1">
+                <label htmlFor="name" className="block text-sm font-semibold text-gray-700 mb-2">
                   Category Name *
                 </label>
                 <input
@@ -169,13 +248,13 @@ const MenuCategoryManager = ({ onClose }) => {
                   value={formData.name}
                   onChange={handleInputChange}
                   required
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                  className="w-full px-4 py-3 border border-gray-300 rounded-2xl focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent bg-white/70 backdrop-blur-sm"
                   placeholder="e.g., Appetizers, Main Course"
                 />
               </div>
               
               <div>
-                <label htmlFor="sort_order" className="block text-sm font-medium text-gray-700 mb-1">
+                <label htmlFor="sort_order" className="block text-sm font-semibold text-gray-700 mb-2">
                   Sort Order
                 </label>
                 <input
@@ -185,14 +264,14 @@ const MenuCategoryManager = ({ onClose }) => {
                   value={formData.sort_order}
                   onChange={handleInputChange}
                   min="0"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                  className="w-full px-4 py-3 border border-gray-300 rounded-2xl focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent bg-white/70 backdrop-blur-sm"
                   placeholder="0"
                 />
               </div>
             </div>
             
             <div>
-              <label htmlFor="description" className="block text-sm font-medium text-gray-700 mb-1">
+              <label htmlFor="description" className="block text-sm font-semibold text-gray-700 mb-2">
                 Description
               </label>
               <textarea
@@ -200,31 +279,31 @@ const MenuCategoryManager = ({ onClose }) => {
                 name="description"
                 value={formData.description}
                 onChange={handleInputChange}
-                rows="3"
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                rows="4"
+                className="w-full px-4 py-3 border border-gray-300 rounded-2xl focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent bg-white/70 backdrop-blur-sm resize-none"
                 placeholder="Brief description of this category"
               />
             </div>
             
-            <div className="flex items-center">
+            <div className="flex items-center space-x-3 p-4 bg-gray-50/80 rounded-2xl">
               <input
                 type="checkbox"
                 id="is_available"
                 name="is_available"
                 checked={formData.is_available}
                 onChange={handleInputChange}
-                className="h-4 w-4 text-green-600 focus:ring-green-500 border-gray-300 rounded"
+                className="h-5 w-5 text-green-600 focus:ring-green-500 border-gray-300 rounded"
               />
-              <label htmlFor="is_available" className="ml-2 block text-sm text-gray-700">
-                Available to customers
+              <label htmlFor="is_available" className="text-sm font-medium text-gray-700">
+                Make this category available to customers
               </label>
             </div>
             
-            <div className="flex justify-end space-x-3 pt-4">
+            <div className="flex justify-end space-x-4 pt-4">
               <button
                 type="button"
                 onClick={resetForm}
-                className="px-4 py-2 text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-md text-sm font-medium transition-colors"
+                className="px-6 py-3 text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-2xl font-semibold transition-all duration-300 hover:scale-105"
                 disabled={submitting}
               >
                 Cancel
@@ -233,7 +312,7 @@ const MenuCategoryManager = ({ onClose }) => {
                 type="button"
                 onClick={handleSubmit}
                 disabled={submitting}
-                className="px-4 py-2 bg-green-600 hover:bg-green-700 disabled:bg-green-400 text-white rounded-md text-sm font-medium transition-colors"
+                className="px-6 py-3 bg-gradient-to-r from-green-500 to-teal-500 hover:from-green-600 hover:to-teal-600 disabled:from-gray-400 disabled:to-gray-500 text-white rounded-2xl font-semibold shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105"
               >
                 {submitting ? 'Saving...' : editingCategory ? 'Update Category' : 'Create Category'}
               </button>
@@ -242,112 +321,65 @@ const MenuCategoryManager = ({ onClose }) => {
         </div>
       )}
 
-      {/* Categories List */}
-      <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
-        {categories.length === 0 ? (
-          <div className="p-8 text-center">
-            <div className="text-gray-400 text-4xl mb-4">📂</div>
-            <h3 className="text-lg font-medium text-gray-900 mb-2">No categories yet</h3>
-            <p className="text-gray-600 mb-4">
-              Create your first menu category to start organizing your items.
-            </p>
-            <button
-              onClick={() => setShowAddForm(true)}
-              className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-md text-sm font-medium transition-colors"
-            >
-              Add First Category
-            </button>
+      {/* Categories Grid */}
+      {categories.length === 0 ? (
+        <div className="bg-white/80 backdrop-blur-xl rounded-3xl p-12 shadow-xl border border-orange-100 text-center">
+          <div className="w-20 h-20 mx-auto mb-6 relative">
+            <div className="absolute inset-0 bg-gradient-to-r from-gray-300 to-gray-400 rounded-full"></div>
+            <div className="absolute inset-2 bg-white rounded-full flex items-center justify-center">
+              <span className="text-3xl">📁</span>
+            </div>
           </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50">
-                <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Category
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Description
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Order
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Items
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Status
-                  </th>
-                  <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Actions
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
-                {categories.map((category) => (
-                  <tr key={category.id} className="hover:bg-gray-50">
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div>
-                        <div className="text-sm font-medium text-gray-900">
-                          {category.name}
-                        </div>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4">
-                      <div className="text-sm text-gray-600 max-w-xs truncate">
-                        {category.description || '-'}
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
-                      {category.sort_order || 0}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
-                      {category.items_count || 0}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                        category.is_available !== false
-                          ? 'bg-green-100 text-green-800'
-                          : 'bg-red-100 text-red-800'
-                      }`}>
-                        {category.is_available !== false ? 'Available' : 'Hidden'}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                      <div className="flex justify-end space-x-2">
-                        <button
-                          onClick={() => handleEdit(category)}
-                          className="text-blue-600 hover:text-blue-900 transition-colors"
-                        >
-                          Edit
-                        </button>
-                        <button
-                          onClick={() => handleDelete(category.id, category.name)}
-                          className="text-red-600 hover:text-red-900 transition-colors"
-                          disabled={category.items_count > 0}
-                          title={category.items_count > 0 ? 'Cannot delete category with menu items' : 'Delete category'}
-                        >
-                          Delete
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
+          <h3 className="text-2xl font-bold text-gray-900 mb-4">No categories yet</h3>
+          <p className="text-gray-600 mb-6 max-w-md mx-auto">
+            Create your first menu category to start organizing your items. Categories help customers navigate your menu easily.
+          </p>
+          <button
+            onClick={() => setShowAddForm(true)}
+            className="bg-gradient-to-r from-green-500 to-teal-500 hover:from-green-600 hover:to-teal-600 text-white px-6 py-3 rounded-2xl font-semibold shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105"
+          >
+            ➕ Add First Category
+          </button>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {categories.map((category) => (
+            <CategoryCard key={category.id} category={category} />
+          ))}
+        </div>
+      )}
 
-      {/* Summary */}
+      {/* Summary Stats */}
       {categories.length > 0 && (
-        <div className="mt-6 bg-blue-50 border border-blue-200 rounded-lg p-4">
-          <div className="flex items-center">
-            <div className="text-blue-600 mr-3">ℹ️</div>
-            <div className="text-sm text-blue-800">
-              <strong>{categories.length}</strong> categories total • 
-              <strong> {categories.filter(c => c.is_available !== false).length}</strong> available • 
-              <strong> {categories.reduce((sum, c) => sum + (c.items_count || 0), 0)}</strong> total menu items
+        <div className="bg-gradient-to-r from-blue-50 to-purple-50 backdrop-blur-xl rounded-3xl p-6 shadow-lg border border-blue-200">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-4">
+              <div className="w-12 h-12 bg-gradient-to-r from-blue-400 to-purple-500 rounded-2xl flex items-center justify-center shadow-lg">
+                <span className="text-xl">📊</span>
+              </div>
+              <div>
+                <h3 className="text-lg font-bold text-gray-800">Category Overview</h3>
+                <p className="text-sm text-gray-600">Your menu organization summary</p>
+              </div>
+            </div>
+            
+            <div className="flex items-center space-x-6">
+              <div className="text-center">
+                <div className="text-2xl font-bold text-blue-600">{categories.length}</div>
+                <div className="text-xs text-gray-600 font-medium">Total Categories</div>
+              </div>
+              <div className="text-center">
+                <div className="text-2xl font-bold text-green-600">
+                  {categories.filter(c => c.is_available !== false).length}
+                </div>
+                <div className="text-xs text-gray-600 font-medium">Available</div>
+              </div>
+              <div className="text-center">
+                <div className="text-2xl font-bold text-purple-600">
+                  {categories.reduce((sum, c) => sum + (c.items_count || 0), 0)}
+                </div>
+                <div className="text-xs text-gray-600 font-medium">Menu Items</div>
+              </div>
             </div>
           </div>
         </div>

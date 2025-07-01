@@ -17,7 +17,6 @@ const RestaurantApp = ({ user, userRole, onLogout }) => {
   const [recentOrders, setRecentOrders] = useState([]);
   const [loading, setLoading] = useState(true);
   const [isOpen, setIsOpen] = useState(true);
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [componentStates, setComponentStates] = useState({
     categories: { mounted: false },
     'menu-items': { mounted: false },
@@ -74,6 +73,7 @@ const RestaurantApp = ({ user, userRole, onLogout }) => {
         const profileRes = await restaurantService.getProfile();
         if (profileRes.success && profileRes.data) {
           setProfile(profileRes.data);
+          setIsOpen(profileRes.data.is_open);
         }
       } catch (error) {
         console.error('Profile fetch failed:', error);
@@ -87,7 +87,7 @@ const RestaurantApp = ({ user, userRole, onLogout }) => {
       }
 
       try {
-        const menuSummaryRes = await restaurantService.getMenuSummary();
+        const menuSummaryRes = await restaurantService.getSummary();
         if (menuSummaryRes.success && menuSummaryRes.data) {
           const summary = menuSummaryRes.data;
           setStats({
@@ -153,16 +153,64 @@ const RestaurantApp = ({ user, userRole, onLogout }) => {
     }
   };
 
-  const navItems = [
-    { id: 'dashboard', label: 'Dashboard', icon: '📊', color: 'blue' },
-    { id: 'categories', label: 'Categories', icon: '📁', color: 'green' },
-    { id: 'menu-items', label: 'Menu Items', icon: '🍽️', color: 'purple' },
-    { id: 'orders', label: 'Orders', icon: '📋', color: 'orange' },
-    { id: 'profile', label: 'Settings', icon: '⚙️', color: 'gray' }
+  // Loading Screen matching Customer UI
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-orange-50 via-amber-50 to-yellow-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="w-20 h-20 mx-auto mb-6 relative">
+            <div className="absolute inset-0 bg-gradient-to-r from-orange-400 to-red-500 rounded-full animate-pulse"></div>
+            <div className="absolute inset-2 bg-white rounded-full flex items-center justify-center">
+              <span className="text-2xl">🏪</span>
+            </div>
+          </div>
+          <h2 className="text-2xl font-bold text-gray-800 mb-2">Setting Up Your Restaurant</h2>
+          <p className="text-gray-600">Loading your dashboard...</p>
+        </div>
+      </div>
+    );
+  }
+
+  const navigation = [
+    { 
+      id: 'dashboard', 
+      name: 'Dashboard', 
+      icon: '📊', 
+      description: 'Overview & stats',
+      gradient: 'from-blue-500 to-purple-500'
+    },
+    { 
+      id: 'categories', 
+      name: 'Categories', 
+      icon: '📁', 
+      description: 'Menu organization',
+      gradient: 'from-green-500 to-teal-500'
+    },
+    { 
+      id: 'menu-items', 
+      name: 'Menu Items', 
+      icon: '🍽️', 
+      description: 'Manage dishes',
+      gradient: 'from-purple-500 to-pink-500'
+    },
+    { 
+      id: 'orders', 
+      name: 'Orders', 
+      icon: '📋', 
+      description: 'Track orders',
+      gradient: 'from-orange-500 to-red-500'
+    },
+    { 
+      id: 'profile', 
+      name: 'Settings', 
+      icon: '⚙️', 
+      description: 'Restaurant profile',
+      gradient: 'from-gray-500 to-gray-700'
+    }
   ];
 
   const StatCard = ({ title, value, icon, color = 'blue', trend }) => (
-    <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100 hover:shadow-md transition-all duration-200">
+    <div className="bg-white/80 backdrop-blur-xl rounded-3xl p-6 shadow-xl border border-orange-100 hover:shadow-2xl transition-all duration-300 hover:scale-105">
       <div className="flex items-center justify-between">
         <div>
           <p className="text-sm font-medium text-gray-600 mb-1">{title}</p>
@@ -173,7 +221,7 @@ const RestaurantApp = ({ user, userRole, onLogout }) => {
             </p>
           )}
         </div>
-        <div className={`p-4 rounded-2xl bg-gradient-to-br from-${color}-400 to-${color}-600 text-white text-2xl`}>
+        <div className={`p-4 rounded-2xl bg-gradient-to-br from-${color}-400 to-${color}-600 text-white text-2xl shadow-lg`}>
           {icon}
         </div>
       </div>
@@ -183,7 +231,7 @@ const RestaurantApp = ({ user, userRole, onLogout }) => {
   const QuickActionCard = ({ title, icon, description, onClick, color = 'blue' }) => (
     <button
       onClick={onClick}
-      className={`group p-6 rounded-2xl border-2 border-gray-200 hover:border-${color}-300 bg-white hover:bg-gradient-to-br hover:from-${color}-50 hover:to-white transition-all duration-200 text-left w-full`}
+      className={`group p-6 rounded-2xl border-2 border-gray-200 hover:border-${color}-300 bg-white/80 backdrop-blur-xl hover:bg-gradient-to-br hover:from-${color}-50 hover:to-white transition-all duration-300 text-left w-full hover:shadow-xl hover:scale-105`}
     >
       <div className="text-3xl mb-3 group-hover:scale-110 transition-transform duration-200">
         {icon}
@@ -194,10 +242,10 @@ const RestaurantApp = ({ user, userRole, onLogout }) => {
   );
 
   const OrderCard = ({ order }) => (
-    <div className="flex items-center justify-between p-4 bg-gray-50 rounded-xl hover:bg-gray-100 transition-colors">
+    <div className="flex items-center justify-between p-4 bg-white/50 backdrop-blur-xl rounded-xl hover:bg-white/70 transition-all duration-300 hover:shadow-lg">
       <div className="flex items-center space-x-3">
-        <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
-          <span className="text-blue-600 font-semibold text-sm">
+        <div className="w-10 h-10 bg-gradient-to-r from-blue-400 to-purple-600 rounded-full flex items-center justify-center shadow-lg">
+          <span className="text-white font-semibold text-sm">
             #{order.order_number?.slice(-3) || order.id?.slice(-3)}
           </span>
         </div>
@@ -222,28 +270,28 @@ const RestaurantApp = ({ user, userRole, onLogout }) => {
       <div className="flex-1 min-h-screen">
         {/* Dashboard */}
         <div className={activeView === 'dashboard' ? 'block' : 'hidden'}>
-          <div className="p-8 space-y-8">
-            {/* Welcome Section */}
-            <div className="bg-gradient-to-r from-blue-600 to-purple-600 rounded-3xl p-8 text-white">
+          <div className="flex-1 p-8 space-y-8">
+            {/* Welcome Header */}
+            <div className="bg-white/80 backdrop-blur-xl rounded-3xl p-8 shadow-xl border border-orange-100">
               <div className="flex justify-between items-start">
                 <div>
-                  <h1 className="text-3xl font-bold mb-2">
+                  <h1 className="text-3xl font-bold bg-gradient-to-r from-orange-600 to-red-600 bg-clip-text text-transparent mb-2">
                     Welcome back! 👋
                   </h1>
-                  <p className="text-blue-100 text-lg">
+                  <p className="text-xl font-semibold text-gray-800">
                     {profile?.restaurant_name || 'Restaurant Dashboard'}
                   </p>
-                  <p className="text-blue-200 mt-1">
+                  <p className="text-gray-600 mt-1">
                     Here's what's happening with your restaurant today.
                   </p>
                 </div>
                 <div className="flex items-center space-x-4">
                   <button
                     onClick={toggleRestaurantStatus}
-                    className={`px-6 py-3 rounded-full font-semibold transition-all ${
+                    className={`px-6 py-3 rounded-full font-semibold transition-all shadow-lg hover:shadow-xl hover:scale-105 ${
                       isOpen 
-                        ? 'bg-green-500 hover:bg-green-600 text-white' 
-                        : 'bg-red-500 hover:bg-red-600 text-white'
+                        ? 'bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white' 
+                        : 'bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white'
                     }`}
                   >
                     {isOpen ? '🟢 Open' : '🔴 Closed'}
@@ -254,7 +302,7 @@ const RestaurantApp = ({ user, userRole, onLogout }) => {
 
             {/* Backend Status */}
             {!profile && !loading && (
-              <div className="bg-amber-50 border border-amber-200 rounded-2xl p-6">
+              <div className="bg-amber-50/80 backdrop-blur-xl border border-amber-200 rounded-2xl p-6 shadow-lg">
                 <div className="flex items-center">
                   <div className="text-amber-600 mr-3 text-2xl">⚠️</div>
                   <div>
@@ -280,28 +328,24 @@ const RestaurantApp = ({ user, userRole, onLogout }) => {
                 value={stats.totalCategories}
                 icon="📁"
                 color="blue"
-                trend={{ positive: true, value: '+2 this week' }}
               />
               <StatCard
                 title="Menu Items"
                 value={stats.totalMenuItems}
                 icon="🍽️"
                 color="green"
-                trend={{ positive: true, value: '+5 this week' }}
               />
               <StatCard
                 title="Total Orders"
                 value={stats.totalOrders}
                 icon="📋"
                 color="purple"
-                trend={{ positive: true, value: '+12% this week' }}
               />
               <StatCard
                 title="Today's Revenue"
                 value={`$${stats.todayRevenue.toFixed(2)}`}
                 icon="💰"
                 color="orange"
-                trend={{ positive: true, value: '+8% vs yesterday' }}
               />
             </div>
 
@@ -309,7 +353,7 @@ const RestaurantApp = ({ user, userRole, onLogout }) => {
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
               {/* Quick Actions */}
               <div className="lg:col-span-2">
-                <h3 className="text-xl font-bold text-gray-900 mb-6">Quick Actions</h3>
+                <h3 className="text-xl font-bold text-gray-800 mb-6">Quick Actions</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <QuickActionCard
                     title="Add Menu Item"
@@ -343,12 +387,12 @@ const RestaurantApp = ({ user, userRole, onLogout }) => {
               </div>
 
               {/* Recent Orders */}
-              <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
+              <div className="bg-white/80 backdrop-blur-xl rounded-3xl p-6 shadow-xl border border-orange-100">
                 <div className="flex items-center justify-between mb-6">
-                  <h3 className="text-xl font-bold text-gray-900">Recent Orders</h3>
+                  <h3 className="text-xl font-bold text-gray-800">Recent Orders</h3>
                   <button
                     onClick={() => handleViewChange('orders')}
-                    className="text-blue-600 hover:text-blue-700 text-sm font-medium"
+                    className="text-orange-600 hover:text-orange-700 text-sm font-medium hover:underline"
                   >
                     View All →
                   </button>
@@ -398,109 +442,147 @@ const RestaurantApp = ({ user, userRole, onLogout }) => {
     );
   };
 
-  if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-16 w-16 border-4 border-blue-600 border-t-transparent mx-auto mb-4"></div>
-          <p className="text-gray-600 font-medium">Loading your dashboard...</p>
-        </div>
-      </div>
-    );
-  }
-
   return (
-    <div className="min-h-screen bg-gray-50 flex">
-      {/* Modern Sidebar */}
-      <div className={`${sidebarCollapsed ? 'w-20' : 'w-72'} bg-white shadow-xl border-r border-gray-200 transition-all duration-300 flex flex-col`}>
-        {/* Header */}
-        <div className="p-6 border-b border-gray-200">
-          <div className="flex items-center justify-between">
-            {!sidebarCollapsed && (
+    <div className="min-h-screen bg-gradient-to-br from-orange-50 via-amber-50 to-yellow-50">
+      {/* Premium Header - Same as Customer UI */}
+      <header className="bg-white/95 backdrop-blur-xl border-b border-orange-100 sticky top-0 z-50 shadow-sm">
+        <div className="w-full px-6 lg:px-8">
+          <div className="flex justify-between items-center h-20">
+            {/* Logo Section */}
+            <div className="flex items-center space-x-4">
+              <div className="relative">
+                <div className="w-14 h-14 bg-gradient-to-r from-orange-500 to-red-500 rounded-2xl flex items-center justify-center shadow-lg">
+                  <span className="text-2xl">🏪</span>
+                </div>
+                <div className={`absolute -bottom-1 -right-1 w-5 h-5 rounded-full border-2 border-white ${isOpen ? 'bg-green-500' : 'bg-red-500'}`}></div>
+              </div>
               <div>
-                <h2 className="text-xl font-bold text-gray-900">Restaurant Hub</h2>
-                <p className="text-sm text-gray-600 mt-1 truncate">
+                <h1 className="text-2xl font-bold bg-gradient-to-r from-orange-600 to-red-600 bg-clip-text text-transparent">
+                  Restaurant Hub
+                </h1>
+                <p className="text-sm text-gray-500 font-medium">
                   {profile?.restaurant_name || 'My Restaurant'}
                 </p>
               </div>
-            )}
-            <button
-              onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
-              className="p-2 rounded-lg hover:bg-gray-100 transition-colors"
-            >
-              <span className="text-gray-600">{sidebarCollapsed ? '→' : '←'}</span>
-            </button>
-          </div>
-        </div>
-        
-        {/* Navigation */}
-        <nav className="flex-1 p-4 space-y-2">
-          {navItems.map((item) => (
-            <button
-              key={item.id}
-              onClick={() => handleViewChange(item.id)}
-              className={`w-full flex items-center p-3 rounded-xl transition-all duration-200 ${
-                activeView === item.id
-                  ? `bg-${item.color}-50 text-${item.color}-700 border border-${item.color}-200`
-                  : 'text-gray-700 hover:bg-gray-100'
-              }`}
-            >
-              <span className="text-xl mr-3">{item.icon}</span>
-              {!sidebarCollapsed && (
-                <span className="font-medium">{item.label}</span>
-              )}
-            </button>
-          ))}
-        </nav>
-
-        {/* User Section */}
-        <div className="p-4 border-t border-gray-200">
-          {!sidebarCollapsed && (
-            <div className="flex items-center justify-between">
-              <div className="flex items-center space-x-3">
-                <div className="w-10 h-10 bg-gradient-to-br from-blue-400 to-purple-600 rounded-full flex items-center justify-center">
-                  <span className="text-white font-bold text-sm">
-                    {user?.displayName?.charAt(0) || user?.email?.charAt(0) || 'U'}
-                  </span>
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-gray-900 truncate">
-                    {user?.displayName || user?.email}
-                  </p>
-                  <p className="text-xs text-gray-600">Restaurant Owner</p>
-                </div>
-              </div>
-              <button
-                onClick={onLogout}
-                className="p-2 text-gray-400 hover:text-red-600 transition-colors"
-                title="Sign Out"
-              >
-                🚪
-              </button>
             </div>
-          )}
-          {sidebarCollapsed && (
-            <div className="flex flex-col items-center space-y-2">
-              <div className="w-10 h-10 bg-gradient-to-br from-blue-400 to-purple-600 rounded-full flex items-center justify-center">
-                <span className="text-white font-bold text-sm">
-                  {user?.displayName?.charAt(0) || user?.email?.charAt(0) || 'U'}
+            
+            {/* Right Section */}
+            <div className="flex items-center space-x-6">
+              {/* Status Indicator */}
+              <div className="hidden md:flex items-center space-x-2">
+                <span className="text-sm text-gray-600">Status:</span>
+                <span className={`px-3 py-1 rounded-full text-xs font-medium ${
+                  isOpen ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+                }`}>
+                  {isOpen ? 'Open' : 'Closed'}
                 </span>
               </div>
-              <button
-                onClick={onLogout}
-                className="p-2 text-gray-400 hover:text-red-600 transition-colors"
-                title="Sign Out"
-              >
-                🚪
-              </button>
+              
+              {/* User Profile */}
+              <div className="flex items-center space-x-4">
+                <div className="hidden sm:block text-right">
+                  <p className="text-sm font-semibold text-gray-800">
+                    {user?.displayName || user?.email}
+                  </p>
+                  <p className="text-xs text-gray-500">Restaurant Owner</p>
+                </div>
+                <div className="relative group">
+                  <div className="w-12 h-12 bg-gradient-to-r from-purple-500 to-pink-500 rounded-2xl flex items-center justify-center text-white font-bold text-lg shadow-lg">
+                    {(user?.displayName || user?.email || 'R')[0].toUpperCase()}
+                  </div>
+                  <div className="absolute right-0 top-14 hidden group-hover:block bg-white rounded-xl shadow-xl border border-gray-200 py-2 min-w-48">
+                    <button
+                      onClick={() => handleViewChange('profile')}
+                      className="w-full px-4 py-2 text-left text-gray-700 hover:bg-gray-50 flex items-center space-x-2"
+                    >
+                      <span>⚙️</span>
+                      <span>Settings</span>
+                    </button>
+                    <button
+                      onClick={onLogout}
+                      className="w-full px-4 py-2 text-left text-red-600 hover:bg-red-50 flex items-center space-x-2"
+                    >
+                      <span>🚪</span>
+                      <span>Sign Out</span>
+                    </button>
+                  </div>
+                </div>
+              </div>
             </div>
-          )}
+          </div>
         </div>
-      </div>
+      </header>
 
-      {/* Main Content */}
-      <div className="flex-1 overflow-auto">
-        {renderContent()}
+      {/* Main Layout */}
+      <div className="w-full px-6 lg:px-8 py-8">
+        <div className="flex gap-8 min-h-[calc(100vh-140px)]">
+          {/* Sidebar Navigation - Same style as Customer UI */}
+          <div className="w-80">
+            <div className="bg-white/80 backdrop-blur-xl rounded-3xl shadow-xl border border-orange-100 p-8 sticky top-32">
+              <div className="mb-8">
+                <h2 className="text-xl font-bold text-gray-800 mb-2">Restaurant Manager</h2>
+                <p className="text-gray-600">Your business dashboard</p>
+              </div>
+              
+              <nav className="space-y-4">
+                {navigation.map((item) => (
+                  <button
+                    key={item.id}
+                    onClick={() => handleViewChange(item.id)}
+                    className={`w-full group relative overflow-hidden rounded-2xl transition-all duration-300 ${
+                      activeView === item.id
+                        ? 'shadow-xl scale-105'
+                        : 'hover:shadow-lg hover:scale-102'
+                    }`}
+                  >
+                    <div className={`w-full p-6 bg-gradient-to-r ${item.gradient} ${
+                      activeView === item.id ? 'opacity-100' : 'opacity-80 group-hover:opacity-90'
+                    }`}>
+                      <div className="flex items-center space-x-4">
+                        <div className="text-3xl">{item.icon}</div>
+                        <div className="text-left text-white">
+                          <div className="font-bold text-lg">{item.name}</div>
+                          <div className="text-sm opacity-90">{item.description}</div>
+                        </div>
+                      </div>
+                    </div>
+                  </button>
+                ))}
+              </nav>
+
+              {/* Quick Stats */}
+              <div className="mt-8 p-6 bg-gradient-to-r from-gray-50 to-orange-50 rounded-2xl border border-orange-100">
+                <h3 className="font-bold text-gray-800 mb-4 flex items-center">
+                  <span className="text-lg mr-2">📊</span>
+                  Today's Stats
+                </h3>
+                <div className="space-y-3">
+                  <div className="flex justify-between items-center p-3 bg-white rounded-xl">
+                    <span className="text-gray-600 font-medium">Orders</span>
+                    <span className="font-bold text-orange-600 text-lg">{stats.totalOrders}</span>
+                  </div>
+                  <div className="flex justify-between items-center p-3 bg-white rounded-xl">
+                    <span className="text-gray-600 font-medium">Revenue</span>
+                    <span className="font-bold text-green-600 text-lg">${stats.todayRevenue.toFixed(2)}</span>
+                  </div>
+                  <div className="flex justify-between items-center p-3 bg-white rounded-xl">
+                    <span className="text-gray-600 font-medium">Status</span>
+                    <span className={`font-bold text-lg ${isOpen ? 'text-green-600' : 'text-red-600'}`}>
+                      {isOpen ? 'Open' : 'Closed'}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Main Content */}
+          <div className="flex-1">
+            <div className="bg-white/80 backdrop-blur-xl rounded-3xl shadow-xl border border-orange-100 min-h-full">
+              {renderContent()}
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   );

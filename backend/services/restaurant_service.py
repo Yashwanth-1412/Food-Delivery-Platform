@@ -501,49 +501,66 @@ class RestaurantService:
             return filtered_items
         except Exception as e:
             raise Exception(f"Error searching menu items: {str(e)}")
-    
-    def get_restaurant_menu_summary(self, restaurant_id: str) -> Dict[str, Any]:
-        """Get summary of restaurant's menu"""
+        
+    def get_restaurant_summary(self, restaurant_id: str) -> Dict[str, Any]:
+        """Get summary of restaurant's menu and today's performance"""
         try:
+            from datetime import datetime
+            
             categories = self.get_menu_categories(restaurant_id)
             all_items = self.get_menu_items(restaurant_id)
-            
-            # Calculate summary stats
+            all_orders = self.get_restaurant_orders(restaurant_id, '')  # Get ALL orders
+        
+            # Calculate menu summary stats
             total_items = len(all_items)
-            available_items = len([item for item in all_items if item.get('is_available', True)])
-            vegetarian_items = len([item for item in all_items if item.get('is_vegetarian', False)])
-            vegan_items = len([item for item in all_items if item.get('is_vegan', False)])
+            total_categories = len(categories)
             
-            # Price range
-            prices = [item.get('price', 0) for item in all_items if item.get('price')]
-            min_price = min(prices) if prices else 0
-            max_price = max(prices) if prices else 0
-            avg_price = sum(prices) / len(prices) if prices else 0
+            # Get today's date
+            today = datetime.now().date()
             
-            # Categories with item counts
-            categories_with_counts = []
-            for category in categories:
-                category_items = [item for item in all_items if item.get('category_id') == category['id']]
-                category['item_count'] = len(category_items)
-                category['available_items'] = len([item for item in category_items if item.get('is_available', True)])
-                categories_with_counts.append(category)
+            # Filter orders in Python
+            today_orders_count = 0
+            today_revenue = 0.0
             
+            for order in all_orders:
+                # Parse order creation date
+                order_date = None
+                if 'created_at' in order:
+                    try:
+                        if isinstance(order['created_at'], str):
+                            # Try common datetime formats
+                            for fmt in ['%Y-%m-%d %H:%M:%S', '%Y-%m-%dT%H:%M:%S', '%Y-%m-%dT%H:%M:%S.%f']:
+                                try:
+                                    order_date = datetime.strptime(order['created_at'], fmt).date()
+                                    break
+                                except ValueError:
+                                    continue
+                            
+                            if order_date is None:
+                                order_date = datetime.fromisoformat(order['created_at'].replace('Z', '+00:00')).date()
+                        else:
+                            order_date = order['created_at'].date()
+                    except Exception:
+                        continue
+                
+                # Check if order is from today
+                if order_date and order_date == today:
+                    today_orders_count += 1
+                    
+                    # Add to today's revenue
+                    order_total = order.get('total', 0)
+                    if isinstance(order_total, (int, float)):
+                        today_revenue += float(order_total)
+        
             return {
-                'total_categories': len(categories),
-                'total_items': total_items,
-                'available_items': available_items,
-                'vegetarian_items': vegetarian_items,
-                'vegan_items': vegan_items,
-                'price_range': {
-                    'min': min_price,
-                    'max': max_price,
-                    'average': round(avg_price, 2)
-                },
-                'categories': categories_with_counts
+                'categoriesCount': total_categories,
+                'itemsCount': total_items,
+                'ordersCount': today_orders_count,
+                'todayRevenue': round(today_revenue, 2)
             }
         except Exception as e:
-            raise Exception(f"Error getting menu summary: {str(e)}")
-    
+            raise Exception(f"Error getting restaurant summary: {str(e)}")
+                    
     def update_restaurant_stats_from_menu(self, restaurant_id: str) -> bool:
         """Update restaurant stats based on current menu"""
         try:

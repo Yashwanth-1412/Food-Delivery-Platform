@@ -235,9 +235,9 @@ export const restaurantService = {
     }
   },
 
-  async getMenuSummary() {
+  async getSummary() {
     try {
-      const response = await api.get('/restaurants/menu/summary');
+      const response = await api.get('/restaurants/summary');
       return response.data;
     } catch (error) {
       console.error('Error getting menu summary:', error);
