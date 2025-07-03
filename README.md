@@ -336,22 +336,6 @@ npx kill-port 5173
 3. Ensure all dependencies are installed
 4. Check Firebase project settings
 
-## 📦 Production Deployment
-
-### Frontend (Vercel/Netlify)
-```bash
-cd frontend
-npm run build
-# Deploy dist/ folder
-```
-
-### Backend (Railway/Heroku)
-```bash
-cd backend
-# Add Procfile: web: python app.py
-# Set environment variables in hosting platform
-# Upload firebase-config.json securely
-```
 
 ## 🤝 Contributing
 
